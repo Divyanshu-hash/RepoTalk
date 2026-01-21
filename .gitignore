@@ -1,0 +1,158 @@
+# =========================
+# OS / System files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Environment & Secrets
+# =========================
+.env
+.env.*
+*.env
+secrets.json
+
+# =========================
+# Python (Common)
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# =========================
+# Virtual Environments
+# =========================
+venv/
+.venv/
+env/
+ENV/
+
+# =========================
+# Django
+# =========================
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+static_root/
+local_settings.py
+settings_local.py
+
+# =========================
+# FastAPI
+# =========================
+__pycache__/
+*.log
+uvicorn.log
+
+# =========================
+# Machine Learning / Data Science
+# =========================
+data/
+datasets/
+*.csv
+*.tsv
+*.h5
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.onnx
+*.npz
+*.npy
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ML experiment tracking
+mlruns/
+wandb/
+
+# =========================
+# React / Frontend
+# =========================
+node_modules/
+dist/
+build/
+.cache/
+.vite/
+.next/
+.nuxt/
+out/
+
+# Package manager files (optional)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Testing / Coverage
+# =========================
+coverage/
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+
+# =========================
+# IDEs & Editors
+# =========================
+.vscode/
+.idea/
+*.iml
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+*.dockerfile~
+
+# =========================
+# Temporary / Backup
+# =========================
+*.tmp
+*.bak
+*.swp
+*.old
+
+# =========================
+# Deployment
+# =========================
+.env.production
+.env.staging
+.env.development
+
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
