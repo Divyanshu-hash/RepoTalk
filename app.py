@@ -264,20 +264,22 @@ REPOSITORY METADATA:
 SAMPLE SOURCE FILES:
 {context}
 
-Based on the above, provide a detailed, well-structured analysis covering the following points. 
-**CRITICAL REQUIREMENT:** You MUST include a ````mermaid` code block containing a flowchart or architecture diagram that visually explains the repository's structure or workflow.
+Based on the above, provide a detailed, well-structured analysis covering the following points.
+**CRITICAL REQUIREMENT:** You MUST include EXACTLY TWO separate mermaid code blocks (each starting with triple-backtick mermaid and ending with triple-backtick). Two distinct diagrams are REQUIRED - do not skip either one.
 
 1. **Purpose & Overview**: What does this project do? What problem does it solve?
-2. **Architecture Diagram (Mermaid)**: Provide a beautiful ````mermaid` graph (e.g. `graph TD` or `flowchart LR`) illustrating the core components and data flow.
+2. **Architecture Diagram (Mermaid #1 - High Level)**: Provide a mermaid code block (triple-backtick mermaid ... triple-backtick) with a flowchart (graph TD or flowchart LR) showing the HIGH-LEVEL architecture - core components, layers, and the data flow between them.
 3. **Architecture Details**: How is the codebase structured? What design patterns are used?
 4. **Key Components**: What are the main modules/files and what do they do?
 5. **Tech Stack**: What technologies, frameworks, and libraries are used?
-6. **How It Works**: Explain the core workflow/data flow of the application.
-7. **Why It Was Built**: Based on the code and description, what motivated this project?
-8. **Strengths**: What's well-done in this codebase?
-9. **Potential Improvements**: What could be improved?
+6. **How It Works**: Explain the core workflow and data flow of the application.
+7. **Sequence / Component Diagram (Mermaid #2)**: Provide a SECOND mermaid diagram using either a sequenceDiagram (showing step-by-step request/response flow) OR a graph showing module/component dependencies. This MUST be visually different from diagram #1.
+8. **Why It Was Built**: Based on the code and description, what motivated this project?
+9. **Strengths**: What is well-done in this codebase?
+10. **Potential Improvements**: What could be improved?
 
-Format your response with clear markdown headers and bullet points. Be specific and reference actual file names and code patterns you see. Do not forget the Mermaid diagram.
+Format your response with clear markdown headers and bullet points. Reference actual file names and code patterns. You MUST include BOTH Mermaid diagrams - omitting either one is not acceptable.
+IMPORTANT MERMAID SYNTAX RULES: Never use parentheses inside square brackets or curly braces in node labels. Instead of writing Frontend (Next.js) inside a node label, write Frontend - Next.js. Node labels must not contain parentheses.
 
 ANALYSIS:
 """

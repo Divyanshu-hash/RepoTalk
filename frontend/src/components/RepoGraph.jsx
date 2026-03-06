@@ -5,18 +5,52 @@ export default function RepoGraph({ apiBase }) {
   const svgRef = useRef(null)
   const tooltipRef = useRef(null)
   const containerRef = useRef(null)
+  const simulationRef = useRef(null)
+  const lastDimensions = useRef({ width: 0, height: 0 })
+  const resizeTimeout = useRef(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [graphData, setGraphData] = useState(null)
 
   useEffect(() => {
     fetchAndRender()
+  }, []) // Only fetch once on mount
+
+  useEffect(() => {
+    if (!graphData) return
+
+    // Resize observer to handle display: none -> block transitions
+    // and initial render once data is ready
+    const resizeObserver = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect
+      if (width === 0) return // Still hidden
+
+      const horizontalChange = Math.abs(width - lastDimensions.current.width) > 20
+      const verticalChange = Math.abs(height - lastDimensions.current.height) > 20
+      const wasHidden = lastDimensions.current.width === 0 && width > 0
+
+      if (horizontalChange || verticalChange || wasHidden) {
+        if (resizeTimeout.current) clearTimeout(resizeTimeout.current)
+        resizeTimeout.current = setTimeout(() => {
+          renderGraph(graphData)
+          lastDimensions.current = { width, height }
+        }, 150)
+      }
+    })
+
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current)
+    }
+
     return () => {
-      // Cleanup simulation on unmount
+      resizeObserver.disconnect()
+      if (resizeTimeout.current) clearTimeout(resizeTimeout.current)
+      if (simulationRef.current) simulationRef.current.stop()
       if (svgRef.current) {
         d3.select(svgRef.current).selectAll('*').remove()
       }
     }
-  }, [])
+  }, [graphData])
 
   const fetchAndRender = async () => {
     try {
@@ -30,7 +64,7 @@ export default function RepoGraph({ apiBase }) {
       }
 
       setLoading(false)
-      renderGraph(data)
+      setGraphData(data)
     } catch (err) {
       setError('Failed to load repository structure')
       setLoading(false)
@@ -38,7 +72,17 @@ export default function RepoGraph({ apiBase }) {
   }
 
   const renderGraph = (data) => {
+    if (!containerRef.current || !data) return
+    
     const svg = d3.select(svgRef.current)
+    
+    // STOP existing simulation before starting a new one
+    if (simulationRef.current) {
+      simulationRef.current.stop()
+    }
+    
+    svg.selectAll('*').remove() // Clear previous render
+
     const container = containerRef.current
     const tooltip = d3.select(tooltipRef.current)
 
@@ -93,11 +137,14 @@ export default function RepoGraph({ apiBase }) {
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(edges).id(d => d.id).distance(d => {
         const sourceType = typeof d.source === 'object' ? d.source.type : 'file'
-        return sourceType === 'root' ? 150 : sourceType === 'directory' ? 80 : 40
+        return sourceType === 'root' ? 250 : sourceType === 'directory' ? 120 : 60
       }))
-      .force('charge', d3.forceManyBody().strength(d => d.type === 'root' ? -500 : d.type === 'directory' ? -200 : -50))
+      .force('charge', d3.forceManyBody().strength(d => d.type === 'root' ? -1000 : d.type === 'directory' ? -400 : -100))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(d => nodeSizeMap[d.type] + 20)) // more space for labels
+      .force('collision', d3.forceCollide().radius(d => (nodeSizeMap[d.type] || 8) + 35))
+      .velocityDecay(0.45) // Slower, calmer movement
+
+    simulationRef.current = simulation
 
     // Add zoom
     const g = svg.append('g')
