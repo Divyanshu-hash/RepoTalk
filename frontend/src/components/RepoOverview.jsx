@@ -152,9 +152,10 @@ export default function RepoOverview() {
                   const id = slugify(children);
                   return <h3 id={id} {...props}>{children}</h3>;
                 },
-                code({node, inline, className, children, ...props}) {
+                code({node, className, children, ...props}) {
                   const match = /language-(\w+)/.exec(className || '')
-                  if (!inline && match && match[1] === 'mermaid') {
+                  const isBlock = node?.position?.start?.line !== node?.position?.end?.line || match
+                  if (isBlock && match && match[1] === 'mermaid') {
                     return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />
                   }
                   return <code className={className} {...props}>{children}</code>

@@ -414,7 +414,7 @@ body {
   position: fixed;
   inset: 0;
   background: var(--bg-overlay);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -423,25 +423,84 @@ body {
   animation: fadeIn 0.3s ease;
 }
 
+.loading-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.loading-logo {
+  width: 40px;
+  height: 40px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.loading-logo div {
+  width: 30px;
+  height: 8px;
+  border-radius: 3px;
+  position: absolute;
+  transform: skewX(-20deg) rotate(-10deg);
+  animation: logoPulse 1.4s ease-in-out infinite;
+}
+
+.loading-logo div:nth-child(1) {
+  background: #74b9ff;
+  top: 20px;
+  z-index: 1;
+  animation-delay: 0s;
+}
+
+.loading-logo div:nth-child(2) {
+  background: #6c5ce7;
+  top: 12px;
+  z-index: 2;
+  animation-delay: 0.15s;
+}
+
+.loading-logo div:nth-child(3) {
+  background: #ff7675;
+  top: 4px;
+  z-index: 3;
+  animation-delay: 0.3s;
+}
+
+@keyframes logoPulse {
+  0%, 100% { opacity: 0.6; transform: skewX(-20deg) rotate(-10deg) translateY(0); }
+  50% { opacity: 1; transform: skewX(-20deg) rotate(-10deg) translateY(-3px); }
+}
+
 .loading-spinner {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border: 3px solid var(--border-subtle);
   border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-  margin-bottom: 1.5rem;
-}
-
-.loading-overlay h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
   margin-bottom: 0.5rem;
 }
 
-.loading-overlay p {
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-overlay-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.loading-overlay-sub {
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  margin: 0;
 }
 
 /* ========== WIKI LAYOUT ========== */
