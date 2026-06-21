@@ -1,4 +1,7 @@
 fastapi
-uvicorn
-requests
+uvicorn[standard]
+httpx
 python-dotenv
+python-jose[cryptography]
+python-multipart
+pydantic-settings
