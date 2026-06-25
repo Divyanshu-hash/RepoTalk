@@ -29,3 +29,13 @@ async def get_current_user(
         "name": payload.get("name"),
         "picture": payload.get("picture"),
     }
+
+
+async def extract_owner_repo(repo_url: str):
+    """Extract owner and repo from a GitHub URL."""
+    parts = repo_url.rstrip("/").split("/")
+    if len(parts) < 2:
+        return None, None
+    owner = parts[-2]
+    repo = parts[-1].replace(".git", "")
+    return owner, repo

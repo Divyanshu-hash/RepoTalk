@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import auth
+from app.api.v1.routes import auth
 from app.core.config import settings
 
 # ──────────────────────────────────────────────
@@ -66,3 +66,5 @@ async def health_check():
 # Routers
 # ──────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(repo.router, prefix="/api/v1")
+
