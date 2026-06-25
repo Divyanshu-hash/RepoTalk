@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1.routes import auth
+from app.api.v1.routes import auth, repo
 from app.core.config import settings
 
 # ──────────────────────────────────────────────
@@ -33,6 +33,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ──────────────────────────────────────────────
+# Database — create tables on startup
+# ──────────────────────────────────────────────
+@app.on_event("startup")
+async def on_startup():
+    # Import all models so Base.metadata knows every table
+    import app.db.models  # noqa: F401
+    from app.db.session import engine, Base
+    from sqlalchemy.exc import OperationalError
+
+    logger.info("Creating database tables if they don't exist...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database ready — all tables created/verified.")
+    except OperationalError as e:
+        logger.warning(
+            "⚠️  Could not connect to MySQL: %s\n"
+            "   → Make sure MySQL is running and DATABASE_URL in .env is correct.\n"
+            "   → Server will start but DB-dependent routes will fail.",
+            str(e).split("\n")[0],
+        )
+
 
 # ──────────────────────────────────────────────
 # Global error handler
@@ -67,4 +90,3 @@ async def health_check():
 # ──────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(repo.router, prefix="/api/v1")
-

@@ -1,10 +1,13 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import get_current_user
 from app.core.config import settings
 from app.core.security import create_access_token
+from app.db.session import get_db
+from app.db.models.User import User
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -35,7 +38,7 @@ async def google_login():
 # Step 2 — Google redirects back here with ?code=
 # ──────────────────────────────────────────────
 @router.get("/google/callback", summary="Google OAuth callback")
-async def google_callback(code: str):
+async def google_callback(code: str, db: Session = Depends(get_db)):
     async with httpx.AsyncClient() as client:
 
         # Exchange authorization code for access token
@@ -62,15 +65,35 @@ async def google_callback(code: str):
             GOOGLE_USERINFO_URL,
             headers={"Authorization": f"Bearer {token_data['access_token']}"},
         )
-        user = userinfo_resp.json()
+        google_user = userinfo_resp.json()
 
-    # Build and sign JWT for this user
+    # ── Upsert user into MySQL ────────────────────────────────
+    db_user = db.query(User).filter(User.google_id == google_user["id"]).first()
+
+    if db_user is None:
+        # First login — create new user
+        db_user = User(
+            google_id=google_user["id"],
+            email=google_user["email"],
+            name=google_user.get("name", ""),
+            picture=google_user.get("picture", ""),
+        )
+        db.add(db_user)
+    else:
+        # Returning user — update mutable fields
+        db_user.name = google_user.get("name", db_user.name)
+        db_user.picture = google_user.get("picture", db_user.picture)
+
+    db.commit()
+    db.refresh(db_user)
+
+    # ── Build and sign JWT ────────────────────────────────────
     jwt_token = create_access_token(
         data={
-            "sub": user["id"],
-            "email": user["email"],
-            "name": user.get("name", ""),
-            "picture": user.get("picture", ""),
+            "sub": google_user["id"],
+            "email": google_user["email"],
+            "name": google_user.get("name", ""),
+            "picture": google_user.get("picture", ""),
         }
     )
 

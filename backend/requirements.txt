@@ -5,3 +5,17 @@ python-dotenv
 python-jose[cryptography]
 python-multipart
 pydantic-settings
+# Database
+sqlalchemy
+pymysql
+cryptography
+# GitHub + RAG
+requests
+langchain
+langchain-community
+langchain-groq
+langchain-huggingface
+langchain-text-splitters
+faiss-cpu
+sentence-transformers
+watchfiles
