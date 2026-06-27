@@ -1,8 +1,12 @@
+import os
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
+from app.db.models.Repository import Repository
 from app.db.session import get_db
 from langchain_groq import ChatGroq
 
@@ -79,7 +83,10 @@ async def extract_owner_repo(repo_url: str):
     return owner, repo
 
 
-async def get_llm() -> ChatGroq:
+_llm: ChatGroq | None = None
+
+
+def get_llm() -> ChatGroq:
     global _llm
     if _llm is None:
         groq_key = os.getenv("GROQ_API_KEY", "")
@@ -90,11 +97,11 @@ async def get_llm() -> ChatGroq:
             )
         _llm = ChatGroq(
             groq_api_key=groq_key,
-            model_name="meta-llama/llama-4-maverick-17b-128e-instruct",
+            model_name="llama-3.3-70b-versatile",
         )
     return _llm
 
-async def _repo_to_metadata_dict(repo: Repository) -> dict:
+def _repo_to_metadata_dict(repo: Repository) -> dict:
     return {
         "name": repo.name,
         "full_name": repo.full_name,
@@ -111,7 +118,7 @@ async def _repo_to_metadata_dict(repo: Repository) -> dict:
         "size": 0,
     }
 
-async def _update_repo_row(repo: Repository, metadata: dict, files_indexed: int, index_path: str) -> None:
+def _update_repo_row(repo: Repository, metadata: dict, files_indexed: int, index_path: str) -> None:
     repo.description = metadata.get("description", repo.description)
     repo.language = metadata.get("language", repo.language)
     repo.stars = metadata.get("stars", repo.stars)

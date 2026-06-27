@@ -67,25 +67,35 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         )
         google_user = userinfo_resp.json()
 
-    # ── Upsert user into MySQL ────────────────────────────────
-    db_user = db.query(User).filter(User.google_id == google_user["id"]).first()
+    # ── Upsert user into MySQL (best-effort — JWT is issued regardless) ──────
+    import logging
+    logger = logging.getLogger(__name__)
 
-    if db_user is None:
-        # First login — create new user
-        db_user = User(
-            google_id=google_user["id"],
-            email=google_user["email"],
-            name=google_user.get("name", ""),
-            picture=google_user.get("picture", ""),
+    try:
+        db_user = db.query(User).filter(User.google_id == google_user["id"]).first()
+
+        if db_user is None:
+            db_user = User(
+                google_id=google_user["id"],
+                email=google_user["email"],
+                name=google_user.get("name", ""),
+                picture=google_user.get("picture", ""),
+            )
+            db.add(db_user)
+        else:
+            db_user.name = google_user.get("name", db_user.name)
+            db_user.picture = google_user.get("picture", db_user.picture)
+
+        db.commit()
+        db.refresh(db_user)
+        logger.info("User %s saved to DB.", google_user["email"])
+    except Exception as e:
+        logger.warning(
+            "DB upsert skipped (MySQL may be offline): %s. "
+            "JWT will still be issued.",
+            str(e).split("\n")[0],
         )
-        db.add(db_user)
-    else:
-        # Returning user — update mutable fields
-        db_user.name = google_user.get("name", db_user.name)
-        db_user.picture = google_user.get("picture", db_user.picture)
-
-    db.commit()
-    db.refresh(db_user)
+        db.rollback()
 
     # ── Build and sign JWT ────────────────────────────────────
     jwt_token = create_access_token(
@@ -97,7 +107,29 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         }
     )
 
-    # Redirect back to frontend — token delivered as query param
+    # ── In development: return token as JSON so you can copy it easily ────────
+    # ── In production: redirect to frontend ──────────────────────────────────
+    if settings.ENVIRONMENT == "development":
+        from fastapi.responses import HTMLResponse
+        html = f"""
+        <html>
+        <head><title>RepoTalk — Dev Token</title></head>
+        <body style="font-family:monospace;background:#0f0f0f;color:#00ff88;padding:2rem;">
+            <h2>✅ Login Successful — Copy your token below</h2>
+            <p style="color:#aaa;">Paste this into Swagger UI → 🔒 Authorize → <code>Bearer &lt;token&gt;</code></p>
+            <textarea rows="6" style="width:100%;background:#1a1a1a;color:#00ff88;border:1px solid #333;padding:1rem;font-size:0.85rem;border-radius:8px;"
+                onclick="this.select()">{jwt_token}</textarea>
+            <br/><br/>
+            <p style="color:#aaa;">
+                Swagger UI: <a href="/docs" style="color:#00aaff;">/docs</a> &nbsp;|&nbsp;
+                Frontend URL: <a href="{settings.FRONTEND_URL}/auth/callback?token={jwt_token}" style="color:#00aaff;">{settings.FRONTEND_URL}</a>
+            </p>
+            <p style="color:#555;font-size:0.75rem;">User: {google_user.get("email")} | Expires in {settings.ACCESS_TOKEN_EXPIRE_DAYS} days</p>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html)
+
     return RedirectResponse(
         url=f"{settings.FRONTEND_URL}/auth/callback?token={jwt_token}"
     )

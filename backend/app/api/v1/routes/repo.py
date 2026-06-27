@@ -35,13 +35,8 @@ DB_DIR = Path("repository_db")
 DB_DIR.mkdir(exist_ok=True)
 
 # ──────────────────────────────────────────────
-# LLM singleton
+# In-memory vectorstore cache  { repo_id → FAISS }
 # ──────────────────────────────────────────────
-_llm: ChatGroq | None = None
-
-
-
-
 
 # ──────────────────────────────────────────────
 # In-memory vectorstore cache  { repo_id → FAISS }
@@ -83,11 +78,28 @@ def _build_repo_graph(tree: list[dict], repo_name: str) -> dict:
 
 
 def _get_or_create_db_user(db: Session, current_user: dict) -> User:
-    """Fetch the ORM User row matching the JWT sub, or raise 404."""
-    user = db.query(User).filter(User.google_id == current_user["id"]).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found. Please log in again.")
-    return user
+    """
+    Fetch the ORM User row matching the JWT sub.
+    If not found (e.g. MySQL was offline during login), create it now.
+    """
+    try:
+        user = db.query(User).filter(User.google_id == current_user["id"]).first()
+        if not user:
+            user = User(
+                google_id=current_user["id"],
+                email=current_user.get("email", ""),
+                name=current_user.get("name", ""),
+                picture=current_user.get("picture", ""),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Database unavailable. Please ensure MySQL is running. ({str(e).split(chr(10))[0]})",
+        )
 
 
 # ═══════════════════════════════════════════════

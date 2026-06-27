@@ -12,15 +12,30 @@ GITHUB_API = "https://api.github.com/repos"
 # File extensions we allow
 ALLOWED_EXTENSIONS = (
     ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp", ".go",
-    ".rs", ".md", ".txt", ".json", ".yaml", ".yml", ".toml",
+    ".rs", ".md", ".txt", ".yaml", ".yml", ".toml",
     ".html", ".css", ".scss", ".rb", ".php", ".swift", ".kt",
-    ".sh", ".bat", ".sql", ".r", ".lua", ".dart",
+    ".sh", ".bat", ".sql", ".r", ".lua", ".dart", ".json",
+    ".env.example", ".gitignore", ".dockerfile",
 )
 
+# Exact filenames to always skip (auto-generated / noise)
+IGNORE_FILES = {
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "composer.lock", "Gemfile.lock", "poetry.lock", "Pipfile.lock",
+    "Cargo.lock", "go.sum",
+    ".DS_Store", "Thumbs.db",
+}
+
+# Directories to skip entirely
 IGNORE_DIRS = {
     "node_modules", ".git", "dist", "build", "__pycache__",
     "venv", ".venv", ".idea", ".vscode", "vendor", ".next",
+    "coverage", ".nyc_output", "out", ".cache",
 }
+
+# Skip files larger than this (bytes) — avoids huge minified/generated files
+MAX_FILE_SIZE = 150_000
+
 
 
 # ──────────────────────────────────────────────
@@ -126,10 +141,21 @@ def fetch_repo_files(owner: str, repo: str, branch: str = "main") -> list[dict]:
     tree = fetch_repo_tree(owner, repo, branch)
     files = []
     for item in tree:
-        if item["type"] == "file" and item["path"].lower().endswith(ALLOWED_EXTENSIONS):
-            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{item['path']}"
-            files.append({"path": item["path"], "url": raw_url})
+        if item["type"] != "file":
+            continue
+        path = item["path"]
+        filename = path.split("/")[-1]
+        # Skip explicitly blocklisted filenames
+        if filename in IGNORE_FILES:
+            continue
+        # Skip files that are too large (minified, generated, etc.)
+        if item.get("size", 0) > MAX_FILE_SIZE:
+            continue
+        if path.lower().endswith(ALLOWED_EXTENSIONS):
+            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
+            files.append({"path": path, "url": raw_url})
     return files
+
 
 
 def load_file_content(url: str) -> str:
