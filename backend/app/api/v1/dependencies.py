@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.models.Repository import Repository
+from app.db.models.User import User
 from app.db.session import get_db
 from langchain_groq import ChatGroq
 
@@ -129,3 +131,40 @@ def _update_repo_row(repo: Repository, metadata: dict, files_indexed: int, index
     repo.files_indexed = files_indexed
     repo.index_path = index_path
     repo.last_accessed = datetime.now(timezone.utc)
+
+
+# ──────────────────────────────────────────────
+# Issue number extractor
+# ──────────────────────────────────────────────
+def _extract_issue_number(query: str) -> int | None:
+    """Extract GitHub issue number from a query string like 'issue #42'."""
+    match = re.search(r"issue\s+#?(\d+)", query.lower())
+    return int(match.group(1)) if match else None
+
+
+# ──────────────────────────────────────────────
+# DB user helper
+# ──────────────────────────────────────────────
+def _get_or_create_db_user(db: Session, current_user: dict) -> User:
+    """
+    Fetch the ORM User row matching the JWT sub.
+    If not found (e.g. MySQL was offline during login), create it now.
+    """
+    try:
+        user = db.query(User).filter(User.google_id == current_user["id"]).first()
+        if not user:
+            user = User(
+                google_id=current_user["id"],
+                email=current_user.get("email", ""),
+                name=current_user.get("name", ""),
+                picture=current_user.get("picture", ""),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Database unavailable. Please ensure MySQL is running. ({str(e).split(chr(10))[0]})",
+        )

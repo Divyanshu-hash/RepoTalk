@@ -1,14 +1,20 @@
 import json
 import logging
 import os
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import get_current_user, get_llm,_repo_to_metadata_dict,_update_repo_row
+from app.api.v1.dependencies import (
+    get_current_user,
+    get_llm,
+    _repo_to_metadata_dict,
+    _update_repo_row,
+    _extract_issue_number,
+    _get_or_create_db_user,
+)
 from app.db.models.ChatHistory import ChatHistory
 from app.db.models.Repository import Repository
 from app.db.models.User import User
@@ -47,60 +53,6 @@ _vectorstore_cache: dict[str, object] = {}
 # ──────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────
-def _extract_issue_number(query: str) -> int | None:
-    match = re.search(r"issue\s+#?(\d+)", query.lower())
-    return int(match.group(1)) if match else None
-
-
-def _build_repo_graph(tree: list[dict], repo_name: str) -> dict:
-    nodes = [{"id": "root", "name": repo_name, "type": "root", "size": 0}]
-    edges = []
-    seen_dirs: set[str] = set()
-
-    for item in tree:
-        path = item["path"]
-        parts = path.split("/")
-
-        for i in range(len(parts) - 1):
-            dir_path = "/".join(parts[: i + 1])
-            if dir_path not in seen_dirs:
-                seen_dirs.add(dir_path)
-                parent = "/".join(parts[:i]) if i > 0 else "root"
-                nodes.append({"id": dir_path, "name": parts[i], "type": "directory", "size": 0})
-                edges.append({"source": parent, "target": dir_path})
-
-        if item["type"] == "file":
-            parent = "/".join(parts[:-1]) if len(parts) > 1 else "root"
-            nodes.append({"id": path, "name": parts[-1], "type": "file", "size": item.get("size", 0)})
-            edges.append({"source": parent, "target": path})
-
-    return {"nodes": nodes, "edges": edges}
-
-
-def _get_or_create_db_user(db: Session, current_user: dict) -> User:
-    """
-    Fetch the ORM User row matching the JWT sub.
-    If not found (e.g. MySQL was offline during login), create it now.
-    """
-    try:
-        user = db.query(User).filter(User.google_id == current_user["id"]).first()
-        if not user:
-            user = User(
-                google_id=current_user["id"],
-                email=current_user.get("email", ""),
-                name=current_user.get("name", ""),
-                picture=current_user.get("picture", ""),
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        return user
-    except Exception as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Database unavailable. Please ensure MySQL is running. ({str(e).split(chr(10))[0]})",
-        )
-
 
 # ═══════════════════════════════════════════════
 # POST /api/v1/repo/load-repo
