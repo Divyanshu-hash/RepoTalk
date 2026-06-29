@@ -192,6 +192,12 @@ def _normalize_generation_error(message: str) -> tuple[str, str]:
     if "Repository is too large" in message:
         return message, "TOKEN_LIMIT_EXCEEDED"
 
+    if "Request too large" in message or "rate_limit_exceeded" in message:
+        return (
+            "The repository is too large for the current model's rate limits. Please try a smaller repository.",
+            "TOKEN_LIMIT_EXCEEDED",
+        )
+
     return message, "STREAM_FAILED"
 
 
