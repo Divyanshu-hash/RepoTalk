@@ -824,7 +824,6 @@ async def generate_stream(parsed: GenerateRequest, request: Request):
         except Exception as exc:
             has_complete_measured_usage = False
             error_message, error_code = _normalize_generation_error(
-                provider=provider,
                 message=str(exc),
             )
             audit = _set_failure(audit, failure_stage=audit.get("stage", "started"), validation_error=error_message)
