@@ -25,7 +25,6 @@ from app.services.complimentary_gate import (
     model_matches_complimentary_family,
     should_apply_complimentary_gate,
 )
-from app.services.cost_estimator import estimate_generation_cost
 from app.services.diagram_state_repository import DiagramStateRepository
 from app.services.github_service import GitHubService
 from app.services.graph_service import (
@@ -41,7 +40,6 @@ from app.services.model_config import (
     get_model,
     get_provider,
     get_provider_label,
-    should_use_exact_input_token_count,
 )
 from app.services.groq_service import GroqService
 from app.services.pricing import (
@@ -51,7 +49,7 @@ from app.services.pricing import (
     sum_generation_usage,
 )
 
-router = APIRouter(prefix="/generate", tags=["AI"])
+router = APIRouter(prefix="/generate", tags=["Repo Graph Structure"])
 
 try:
     groq_service = GroqService()
@@ -68,8 +66,6 @@ BROWSE_INDEX_UPDATE_DEBOUNCE_SECONDS = 30
 class GenerateRequest(BaseModel):
     username: str = Field(min_length=1)
     repo: str = Field(min_length=1)
-    api_key: str | None = Field(default=None, min_length=1)
-    github_pat: str | None = Field(default=None, min_length=1)
 
 
 class _ClientDisconnectedError(Exception):
@@ -144,11 +140,7 @@ class PublicBrowseIndexUpdater:
 public_browse_index_updater = PublicBrowseIndexUpdater(diagram_state_repository)
 
 
-DEFAULT_OPENAI_KEY_QUOTA_EXHAUSTED_ERROR = (
-    "GitDiagram's default OpenAI key is temporarily unavailable because its "
-    "upstream API quota is exhausted. I'm a solo student engineer running this "
-    "free and open source, so please try again later or use your own OpenAI API key."
-)
+
 FREE_GENERATION_INPUT_TOKEN_LIMIT = 100_000
 HARD_GENERATION_INPUT_TOKEN_LIMIT = 195_000
 
@@ -161,12 +153,12 @@ def _parse_request_payload(payload: Any) -> tuple[GenerateRequest | None, str | 
     try:
         parsed = GenerateRequest.model_validate(payload)
         return parsed, None
-    except ValidationError:
-        return None, "Invalid request payload."
+    except ValidationError as e:
+        return None, f"Invalid request payload: {e.errors()}"
 
 
-def _get_github_data(username: str, repo: str, github_pat: str | None):
-    github_service = GitHubService(pat=github_pat)
+def _get_github_data(username: str, repo: str):
+    github_service = GitHubService()
     github_data = github_service.get_github_data(username, repo)
     return SimpleNamespace(
         default_branch=github_data.default_branch,
@@ -196,34 +188,9 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _is_openai_quota_exhausted_error(message: str) -> bool:
-    normalized = message.strip().lower()
-    if not normalized:
-        return False
-
-    return "insufficient_quota" in normalized or (
-        "exceeded your current quota" in normalized and "billing" in normalized
-    )
-
-
-def _normalize_generation_error(
-    *,
-    provider: str,
-    api_key: str | None,
-    message: str,
-) -> tuple[str, str]:
+def _normalize_generation_error(message: str) -> tuple[str, str]:
     if "Repository is too large" in message:
         return message, "TOKEN_LIMIT_EXCEEDED"
-
-    if (
-        provider == "openai"
-        and not api_key
-        and _is_openai_quota_exhausted_error(message)
-    ):
-        return (
-            DEFAULT_OPENAI_KEY_QUOTA_EXHAUSTED_ERROR,
-            "DEFAULT_OPENAI_KEY_QUOTA_EXHAUSTED",
-        )
 
     return message, "STREAM_FAILED"
 
@@ -292,103 +259,9 @@ def _append_stage_usage(audit: dict[str, Any], stage_usage: dict[str, Any]) -> d
     return next_audit
 
 
-@router.post("/cost")
-async def get_generation_cost(request: Request):
-    timer = Timer()
-    try:
-        payload = await request.json()
-        parsed, error = _parse_request_payload(payload)
-        if not parsed:
-            return JSONResponse({"ok": False, "error": error, "error_code": "VALIDATION_ERROR"})
-
-        provider = get_provider()
-        model = get_model(provider)
-        if is_complimentary_gate_enabled() and not parsed.api_key:
-            if provider != "openai":
-                return JSONResponse(
-                    {
-                        "ok": False,
-                        "error": get_complimentary_provider_mismatch_message(),
-                        "error_code": "COMPLIMENTARY_GATE_PROVIDER_MISMATCH",
-                    }
-                )
-            if not model_matches_complimentary_family(model):
-                return JSONResponse(
-                    {
-                        "ok": False,
-                        "error": get_complimentary_model_mismatch_message(),
-                        "error_code": "COMPLIMENTARY_GATE_MODEL_MISMATCH",
-                    }
-                )
-        github_data = await asyncio.to_thread(
-            _get_github_data,
-            parsed.username,
-            parsed.repo,
-            parsed.github_pat,
-        )
-        estimate = await estimate_generation_cost(
-            provider=provider,
-            model=model,
-            file_tree=github_data.file_tree,
-            readme=github_data.readme,
-            username=parsed.username,
-            repo=parsed.repo,
-            api_key=parsed.api_key,
-            prefer_exact_input_token_count=should_use_exact_input_token_count(
-                provider,
-                parsed.api_key,
-            ),
-        )
-        pricing = estimate["pricing"]
-
-        response_payload = {
-            "ok": True,
-            "cost": estimate["cost_summary"]["display"],
-            "cost_summary": estimate["cost_summary"],
-            "model": model,
-            "pricing_model": estimate["pricing_model"],
-            "estimated_input_tokens": estimate["estimated_input_tokens"],
-            "estimated_output_tokens": estimate["estimated_output_tokens"],
-            "pricing": {
-                "input_per_million_usd": pricing.input_per_million_usd,
-                "output_per_million_usd": pricing.output_per_million_usd,
-            },
-        }
-        log_event(
-            "generate.cost.success",
-            username=parsed.username,
-            repo=parsed.repo,
-            elapsed_ms=timer.elapsed_ms(),
-            model=model,
-        )
-        return JSONResponse(response_payload)
-    except Exception as exc:
-        log_event("generate.cost.failed", elapsed_ms=timer.elapsed_ms(), error=str(exc))
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": str(exc) if isinstance(exc, Exception) else "Failed to estimate generation cost.",
-                "error_code": "COST_ESTIMATION_FAILED",
-            }
-        )
-
 
 @router.post("/stream")
-async def generate_stream(request: Request):
-    try:
-        payload = await request.json()
-    except Exception:
-        return JSONResponse(
-            {"ok": False, "error": "Invalid request payload.", "error_code": "VALIDATION_ERROR"},
-            status_code=400,
-        )
-
-    parsed, error = _parse_request_payload(payload)
-    if not parsed:
-        return JSONResponse(
-            {"ok": False, "error": error, "error_code": "VALIDATION_ERROR"},
-            status_code=400,
-        )
+async def generate_stream(parsed: GenerateRequest, request: Request):
 
     async def event_generator():
         timer = Timer()
@@ -398,7 +271,7 @@ async def generate_stream(request: Request):
         quota_reservation = None
         actual_usages = []
         has_complete_measured_usage = True
-        storage_visibility = "private" if parsed.github_pat else "public"
+        storage_visibility = "public"
         was_cancelled = False
 
         async def persist_terminal_audit(next_audit: dict[str, Any] | None = None) -> None:
@@ -411,7 +284,7 @@ async def generate_stream(request: Request):
                     repo=parsed.repo,
                     audit=next_audit or audit,
                     visibility=storage_visibility,
-                    github_pat=parsed.github_pat,
+
                 )
             except Exception as exc:
                 log_event(
@@ -444,7 +317,7 @@ async def generate_stream(request: Request):
                     used_own_key=used_own_key,
                     stargazer_count=stargazer_count,
                     visibility=storage_visibility,
-                    github_pat=parsed.github_pat,
+
                 )
             except Exception as exc:
                 log_event(
@@ -479,7 +352,7 @@ async def generate_stream(request: Request):
 
         try:
             await _ensure_client_connected(request)
-            if is_complimentary_gate_enabled() and not parsed.api_key:
+            if is_complimentary_gate_enabled() :
                 if provider != "openai":
                     error_message = get_complimentary_provider_mismatch_message()
                     audit = _set_failure(
@@ -534,41 +407,19 @@ async def generate_stream(request: Request):
                 _get_github_data,
                 parsed.username,
                 parsed.repo,
-                parsed.github_pat,
+
             )
             await _ensure_client_connected(request)
             storage_visibility = "private" if getattr(github_data, "is_private", False) else "public"
             provider_label = get_provider_label(provider)
-            estimate = await estimate_generation_cost(
-                provider=provider,
-                model=model,
-                file_tree=github_data.file_tree,
-                readme=github_data.readme,
-                username=parsed.username,
-                repo=parsed.repo,
-                api_key=parsed.api_key,
-                prefer_exact_input_token_count=should_use_exact_input_token_count(
-                    provider,
-                    parsed.api_key,
-                ),
-            )
-            token_count = estimate["explanation_input_tokens"]
+            input_text = f"{github_data.file_tree}\n{github_data.readme}"
+            token_count = groq_service.estimate_tokens(input_text)
 
-            audit = _append_stage_usage(
-                _set_estimated_cost(audit, estimate["cost_summary"]),
-                {
-                    "stage": "estimate",
-                    "model": model,
-                    "costSummary": estimate["cost_summary"],
-                    "createdAt": _now_iso(),
-                },
-            )
             yield send(
                 {
                     "status": "started",
                     "session_id": audit["sessionId"],
                     "message": "Starting generation process...",
-                    "cost_summary": estimate["cost_summary"],
                 }
             )
 
@@ -576,8 +427,7 @@ async def generate_stream(request: Request):
             if should_apply_complimentary_gate(
                 provider=provider,
                 model=model,
-                api_key=parsed.api_key,
-            ):
+                ):
                 if not diagram_state_repository.quota_is_configured():
                     error_message = (
                         "OPENAI_COMPLIMENTARY_GATE_ENABLED requires a quota backend "
@@ -607,8 +457,8 @@ async def generate_stream(request: Request):
                     return
 
                 requested_tokens = build_complimentary_admission_tokens(
-                    explanation_input_tokens=estimate["explanation_input_tokens"],
-                    graph_static_input_tokens=estimate["graph_static_input_tokens"],
+                    explanation_input_tokens=token_count,
+                    graph_static_input_tokens=token_count,
                 )
                 admitted, quota_reservation, quota_reset_at = await asyncio.to_thread(
                     admit_complimentary_quota,
@@ -654,7 +504,7 @@ async def generate_stream(request: Request):
             if (
                 token_count > FREE_GENERATION_INPUT_TOKEN_LIMIT
                 and token_count < HARD_GENERATION_INPUT_TOKEN_LIMIT
-                and not parsed.api_key
+                
             ):
                 error_message = (
                     "File tree and README combined exceeds token limit "
@@ -716,7 +566,6 @@ async def generate_stream(request: Request):
                 model=model,
                 system_prompt=SYSTEM_FIRST_PROMPT,
                 data={"file_tree": github_data.file_tree, "readme": github_data.readme},
-                api_key=parsed.api_key,
                 reasoning_effort="medium",
                 max_output_tokens=EXPLANATION_MAX_OUTPUT_TOKENS,
             )
@@ -799,7 +648,6 @@ async def generate_stream(request: Request):
                         "validation_feedback": validation_feedback,
                     },
                     text_format=DiagramGraph,
-                    api_key=parsed.api_key,
                     reasoning_effort="low",
                     max_output_tokens=GRAPH_MAX_OUTPUT_TOKENS,
                 )
@@ -947,7 +795,6 @@ async def generate_stream(request: Request):
                 explanation=explanation,
                 graph=valid_graph.model_dump(by_alias=True),
                 diagram=diagram,
-                used_own_key=bool(parsed.api_key),
                 stargazer_count=getattr(github_data, "stargazer_count", None),
             )
 
@@ -978,7 +825,6 @@ async def generate_stream(request: Request):
             has_complete_measured_usage = False
             error_message, error_code = _normalize_generation_error(
                 provider=provider,
-                api_key=parsed.api_key,
                 message=str(exc),
             )
             audit = _set_failure(audit, failure_stage=audit.get("stage", "started"), validation_error=error_message)

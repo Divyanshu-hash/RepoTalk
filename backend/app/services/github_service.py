@@ -78,11 +78,10 @@ class GitHubService:
     _shared_token_expires_at: datetime | None = None
     _shared_token_lock = Lock()
 
-    def __init__(self, pat: str | None = None):
-        # Request-provided PAT → env GITHUB_PAT → env GITHUB_TOKEN (existing convention)
+    def __init__(self):
+        # env GITHUB_PAT → env GITHUB_TOKEN (existing convention)
         self.github_token = (
-            pat
-            or os.getenv("GITHUB_PAT")
+            os.getenv("GITHUB_PAT")
             or os.getenv("GITHUB_TOKEN")
             or ""
         ).strip() or None

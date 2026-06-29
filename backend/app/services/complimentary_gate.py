@@ -14,22 +14,22 @@ from app.services.pricing import (
 )
 
 DEFAULT_DAILY_LIMIT_TOKENS = 10_000_000
-DEFAULT_MODEL_FAMILY = "gpt-5.4-mini"
+DEFAULT_MODEL_FAMILY = "llama-3.1"
 RETRY_INPUT_BUFFER_TOKENS = 2_000
 DEFAULT_DENIAL_MESSAGE = (
-    "GitDiagram's free daily OpenAI capacity is used up for now. "
+    "GitDiagram's free daily capacity is used up for now. "
     "I'm a solo student engineer running this free and open source, "
-    "so please try again after 00:00 UTC or use your own OpenAI API key."
+    "so please try again after 00:00 UTC or use your own API key."
 )
 DEFAULT_PROVIDER_MISMATCH_MESSAGE = (
-    "GitDiagram's complimentary-only mode requires AI_PROVIDER=openai on the "
-    "default server key. I'm a solo student engineer running this free and open "
-    "source, so please either switch the server back to OpenAI mini or use your own API key."
+    "GitDiagram's complimentary-only mode requires a supported default server key. "
+    "I'm a solo student engineer running this free and open source, "
+    "so please use your own API key."
 )
 DEFAULT_MODEL_MISMATCH_MESSAGE = (
-    "GitDiagram's complimentary-only mode requires the gpt-5.4-mini model family "
+    "GitDiagram's complimentary-only mode requires the default model family "
     "on the default server key. I'm a solo student engineer running this free and open "
-    "source, so please switch the server back to OpenAI mini or use your own API key."
+    "source, so please use your own API key."
 )
 @dataclass(frozen=True)
 class ComplimentaryQuotaReservation:
@@ -61,25 +61,22 @@ def _read_str(name: str, fallback: str) -> str:
 
 
 def is_complimentary_gate_enabled() -> bool:
-    return _read_flag("OPENAI_COMPLIMENTARY_GATE_ENABLED")
+    return _read_flag("COMPLIMENTARY_GATE_ENABLED")
 
 
 def should_apply_complimentary_gate(
     *,
     provider: AIProvider,
     model: str,
-    api_key: str | None,
 ) -> bool:
     if not is_complimentary_gate_enabled():
         return False
-    if provider != "openai":
-        return False
-    return not api_key
+    return True
 
 
 def get_complimentary_model_family() -> str:
     return resolve_pricing_model(
-        _read_str("OPENAI_COMPLIMENTARY_MODEL_FAMILY", DEFAULT_MODEL_FAMILY)
+        _read_str("COMPLIMENTARY_MODEL_FAMILY", DEFAULT_MODEL_FAMILY)
     )
 
 
@@ -89,7 +86,7 @@ def model_matches_complimentary_family(model: str) -> bool:
 
 def get_complimentary_daily_limit_tokens() -> int:
     return _read_int(
-        "OPENAI_COMPLIMENTARY_DAILY_LIMIT_TOKENS",
+        "COMPLIMENTARY_DAILY_LIMIT_TOKENS",
         DEFAULT_DAILY_LIMIT_TOKENS,
     )
 
@@ -110,7 +107,7 @@ def get_complimentary_quota_reset_at(now: datetime | None = None) -> str:
 
 
 def get_complimentary_quota_bucket(model: str) -> str:
-    return f"openai:{resolve_pricing_model(model)}:complimentary"
+    return f"groq:{resolve_pricing_model(model)}:complimentary"
 
 
 def build_complimentary_admission_tokens(

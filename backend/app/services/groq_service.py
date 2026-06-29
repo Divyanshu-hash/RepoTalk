@@ -1,6 +1,5 @@
 """
-Groq-backed LLM service — mirrors the OpenAIService interface so graph.py
-and cost_estimator.py can swap providers without changing their call-sites.
+Groq-backed LLM service for diagram generation.
 Uses langchain_groq.ChatGroq (already installed for the chat feature).
 """
 from __future__ import annotations
@@ -24,7 +23,7 @@ DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 
 class GroqService:
     """
-    Drop-in replacement for OpenAIService using Groq + LangChain.
+    Groq LLM Service using LangChain.
 
     Extra kwargs (provider, api_key, reasoning_effort) are silently ignored
     so call-sites in graph.py don't need to change.
