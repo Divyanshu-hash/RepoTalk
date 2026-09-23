@@ -6,7 +6,7 @@ from typing import Literal
 AIProvider = Literal["groq"]
 
 DEFAULT_PROVIDER: AIProvider = "groq"
-DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
 
 def _read_env(name: str) -> str | None:
     value = os.getenv(name, "").strip()

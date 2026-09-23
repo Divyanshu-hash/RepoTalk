@@ -790,7 +790,7 @@ async def generate_stream(parsed: GenerateRequest, request: Request):
                 )
                 if has_complete_measured_usage
                 else {
-                    **estimate["cost_summary"],
+                    **audit.get("estimatedCost", {}),
                     "kind": "actual",
                     "note": "Some stage usage was unavailable, so the final cost remains approximate.",
                 }

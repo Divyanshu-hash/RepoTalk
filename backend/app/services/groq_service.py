@@ -18,7 +18,7 @@ from app.utils.format_message import format_user_message
 
 StructuredOutputModel = TypeVar("StructuredOutputModel", bound=BaseModel)
 
-DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
 
 
 class GroqService:
