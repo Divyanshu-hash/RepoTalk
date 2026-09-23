@@ -14,7 +14,7 @@ from app.services.pricing import (
 )
 
 DEFAULT_DAILY_LIMIT_TOKENS = 10_000_000
-DEFAULT_MODEL_FAMILY = "llama-3.1"
+DEFAULT_MODEL_FAMILY = "llama-3.3"
 RETRY_INPUT_BUFFER_TOKENS = 2_000
 DEFAULT_DENIAL_MESSAGE = (
     "GitDiagram's free daily capacity is used up for now. "

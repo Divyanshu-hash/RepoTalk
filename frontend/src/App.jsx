@@ -1,6 +1,7 @@
 import React from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { RepoProvider, useRepo } from './context/RepoContext';
+import { AuthProvider } from './context/AuthContext';
 import RootLayout from './layouts/RootLayout';
 import LandingPage from './pages/LandingPage';
 import WikiPage from './pages/WikiPage';
@@ -35,9 +36,11 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <RepoProvider>
-        <AppContent />
-      </RepoProvider>
+      <AuthProvider>
+        <RepoProvider>
+          <AppContent />
+        </RepoProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

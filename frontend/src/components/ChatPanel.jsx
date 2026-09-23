@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import Markdown from 'react-markdown'
+import { useAuth } from '../context/AuthContext'
 
 export default function ChatPanel({ apiBase }) {
+  const { token } = useAuth()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -25,9 +27,12 @@ export default function ChatPanel({ apiBase }) {
     setLoading(true)
 
     try {
-      const res = await fetch(`${apiBase}/chat`, {
+      const res = await fetch(`${apiBase}/repo/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ query })
       })
       const data = await res.json()

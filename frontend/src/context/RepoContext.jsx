@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState } from 'react';
+import { useAuth } from './AuthContext';
 
 const RepoContext = createContext();
 
-export const API_BASE = 'http://localhost:8000';
+export const API_BASE = 'http://localhost:8000/api/v1';
 
 export function RepoProvider({ children }) {
+  const { token } = useAuth();
   const [repoLoaded, setRepoLoaded] = useState(false);
   const [metadata, setMetadata] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -22,9 +24,12 @@ export function RepoProvider({ children }) {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/load-repo`, {
+      const res = await fetch(`${API_BASE}/repo/load-repo`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ repo_url: url })
       });
 
@@ -49,7 +54,12 @@ export function RepoProvider({ children }) {
   const generateAnalysis = async () => {
     setAnalysisLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/repo-analysis`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/repo/analysis`, { 
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await res.json();
       if (data.error) {
         setAnalysis('⚠️ ' + data.error);

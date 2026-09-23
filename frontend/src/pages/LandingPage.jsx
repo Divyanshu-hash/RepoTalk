@@ -2,10 +2,12 @@ import React from 'react';
 import Hero from '../components/Hero';
 import { useTheme } from '../context/ThemeContext';
 import { useRepo } from '../context/RepoContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function LandingPage() {
   const { theme, toggleTheme } = useTheme();
   const { loadRepo } = useRepo();
+  const { user, login, logout } = useAuth();
 
   return (
     <>
@@ -35,6 +37,18 @@ export default function LandingPage() {
             </svg>
           )}
         </button>
+        {user ? (
+          <div className="user-profile">
+            {user.picture && <img src={user.picture} alt="Profile" className="user-avatar" style={{width: 32, height: 32, borderRadius: '50%', marginLeft: 16}} />}
+            <button className="control-btn exit-btn" onClick={logout} style={{marginLeft: 16}}>
+              Logout
+            </button>
+          </div>
+        ) : (
+          <button className="theme-btn" onClick={login} style={{marginLeft: 16}}>
+            Sign In
+          </button>
+        )}
       </header>
       <Hero onLoadRepo={loadRepo} />
     </>

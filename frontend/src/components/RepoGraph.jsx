@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import * as d3 from 'd3'
+import { useAuth } from '../context/AuthContext'
 
 export default function RepoGraph({ apiBase }) {
+  const { token } = useAuth()
   const svgRef = useRef(null)
   const tooltipRef = useRef(null)
   const containerRef = useRef(null)
@@ -54,7 +56,11 @@ export default function RepoGraph({ apiBase }) {
 
   const fetchAndRender = async () => {
     try {
-      const res = await fetch(`${apiBase}/repo-structure`)
+      const res = await fetch(`${apiBase}/repo/structure`, {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      })
       const data = await res.json()
 
       if (data.error) {

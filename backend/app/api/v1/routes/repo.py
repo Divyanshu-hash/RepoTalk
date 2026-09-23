@@ -428,6 +428,71 @@ ANSWER:"""
         "issue": issue_data,
     }
 
+# ═══════════════════════════════════════════════
+# GET /api/v1/repo/structure
+# ═══════════════════════════════════════════════
+@router.get("/structure", summary="Get repository file structure for graph rendering")
+async def get_repo_structure(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db_user = _get_or_create_db_user(db, current_user)
+    repo = (
+        db.query(Repository)
+        .filter(Repository.user_id == db_user.id)
+        .order_by(Repository.last_accessed.desc())
+        .first()
+    )
+    if not repo:
+        raise HTTPException(status_code=404, detail="No repository loaded. Call /load-repo first.")
+
+    # We need the owner and repo from the URL
+    owner, repo_name = extract_owner_repo(repo.html_url)
+    if not owner or not repo_name:
+        raise HTTPException(status_code=400, detail="Invalid repository URL in database")
+
+    branch = repo.default_branch or "main"
+
+    tree = fetch_repo_tree(owner, repo_name, branch)
+    if not tree:
+        raise HTTPException(status_code=404, detail="Could not fetch repository tree")
+
+    # Build graph data: nodes and edges
+    nodes = [{"id": "root", "name": repo_name, "type": "root", "size": 0}]
+    edges = []
+    seen_dirs = set()
+
+    for item in tree:
+        path = item["path"]
+        parts = path.split("/")
+
+        # Create directory nodes for all parent directories
+        for i in range(len(parts) - 1):
+            dir_path = "/".join(parts[:i + 1])
+            if dir_path not in seen_dirs:
+                seen_dirs.add(dir_path)
+                parent = "/".join(parts[:i]) if i > 0 else "root"
+                nodes.append({
+                    "id": dir_path,
+                    "name": parts[i],
+                    "type": "directory",
+                    "size": 0
+                })
+                edges.append({"source": parent, "target": dir_path})
+
+        # Add file node
+        if item["type"] == "file":
+            parent = "/".join(parts[:-1]) if len(parts) > 1 else "root"
+            nodes.append({
+                "id": path,
+                "name": parts[-1],
+                "type": "file",
+                "size": item.get("size", 0)
+            })
+            edges.append({"source": parent, "target": path})
+
+    return {"nodes": nodes, "edges": edges}
+
 
 # ═══════════════════════════════════════════════
 # GET /api/v1/repo/chat-history
