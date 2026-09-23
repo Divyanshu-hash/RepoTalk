@@ -99,7 +99,7 @@ def get_llm() -> ChatGroq:
             )
         _llm = ChatGroq(
             groq_api_key=groq_key,
-            model_name="llama-3.3-70b-versatile",
+            model_name="openai/gpt-oss-20b",
         )
     return _llm
 
@@ -168,3 +168,71 @@ def _get_or_create_db_user(db: Session, current_user: dict) -> User:
             status_code=503,
             detail=f"Database unavailable. Please ensure MySQL is running. ({str(e).split(chr(10))[0]})",
         )
+
+
+def _ensure_user_repo_record(
+    db: Session,
+    db_user: User,
+    owner: str,
+    repo_name: str,
+    repo_path,
+) -> "Repository":
+    """
+    Ensure the current user has a DB record for a repo that is already
+    indexed on disk (possibly by a different user). If the record exists,
+    update last_accessed. If not, create a lightweight record pointing to
+    the shared FAISS index, fetching any missing metadata from GitHub.
+    """
+    from app.db.models.Repository import Repository
+    from app.services.github_loader import fetch_repo_metadata
+    import json
+
+    full_name = f"{owner}/{repo_name}"
+    existing = (
+        db.query(Repository)
+        .filter(Repository.user_id == db_user.id, Repository.full_name == full_name)
+        .first()
+    )
+
+    if existing:
+        existing.last_accessed = datetime.now(timezone.utc)
+        db.commit()
+        return existing
+
+    # Try to load metadata from the cached documents.json first
+    files_indexed = 0
+    metadata = {}
+    docs_path = repo_path / "documents.json"
+    if docs_path.exists():
+        try:
+            files_indexed = len(json.loads(docs_path.read_text()))
+        except Exception:
+            pass
+
+    # Fetch live metadata from GitHub (lightweight, single API call)
+    meta, _ = fetch_repo_metadata(owner, repo_name)
+    if meta:
+        metadata = meta
+
+    branch = metadata.get("default_branch", "main")
+    new_record = Repository(
+        user_id=db_user.id,
+        owner=owner,
+        name=repo_name,
+        full_name=metadata.get("full_name", full_name),
+        html_url=metadata.get("html_url"),
+        description=metadata.get("description"),
+        language=metadata.get("language"),
+        stars=metadata.get("stars", 0),
+        forks=metadata.get("forks", 0),
+        open_issues=metadata.get("open_issues", 0),
+        default_branch=branch,
+        topics=metadata.get("topics", []),
+        owner_avatar=metadata.get("owner_avatar"),
+        files_indexed=files_indexed or metadata.get("size", 0),
+        index_path=str(repo_path),
+    )
+    db.add(new_record)
+    db.commit()
+    db.refresh(new_record)
+    return new_record
