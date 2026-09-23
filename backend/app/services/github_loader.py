@@ -16,6 +16,7 @@ ALLOWED_EXTENSIONS = (
     ".html", ".css", ".scss", ".rb", ".php", ".swift", ".kt",
     ".sh", ".bat", ".sql", ".r", ".lua", ".dart", ".json",
     ".env.example", ".gitignore", ".dockerfile",
+    "readme", "makefile", "dockerfile"
 )
 
 # Exact filenames to always skip (auto-generated / noise)
@@ -53,10 +54,10 @@ def _get_headers() -> dict:
 def _github_get(url: str) -> requests.Response:
     """GET with automatic 401 fallback for public repos."""
     headers = _get_headers()
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=15)
     if response.status_code == 401 and "Authorization" in headers:
         del headers["Authorization"]
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=15)
     return response
 
 
@@ -118,9 +119,12 @@ def fetch_repo_tree(owner: str, repo: str, branch: str = "main") -> list[dict]:
     # Fallback to 'master'
     if response.status_code != 200:
         url = f"{GITHUB_API}/{owner}/{repo}/git/trees/master?recursive=1"
-        response = _github_get(url)
-        if response.status_code != 200:
+        fallback_response = _github_get(url)
+        if fallback_response.status_code != 200:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to fetch tree. First attempt status: {response.status_code}, Body: {response.text}. Fallback status: {fallback_response.status_code}, Body: {fallback_response.text}")
             return []
+        response = fallback_response
 
     result = []
     for item in response.json().get("tree", []):
@@ -194,8 +198,9 @@ def fetch_files_concurrently(files: list[dict], max_workers: int = 15) -> list[s
             content = load_file_content(f["url"])
             if content and content.strip():
                 return f"File Path: {f['path']}\n---------------------\n{content}"
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Failed to fetch %s: %s", f['url'], e)
         return None
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:

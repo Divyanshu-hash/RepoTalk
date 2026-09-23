@@ -14,6 +14,7 @@ from app.api.v1.dependencies import (
     _update_repo_row,
     _extract_issue_number,
     _get_or_create_db_user,
+    _ensure_user_repo_record,
 )
 from app.db.models.ChatHistory import ChatHistory
 from app.db.models.Repository import Repository
@@ -65,8 +66,9 @@ async def load_repo(
 ):
     """
     Fetch, index, and cache a GitHub repository.
-    - On first call: fetches GitHub, builds FAISS index, saves metadata to MySQL.
-    - On repeat call for the same repo: reloads from disk + MySQL.
+    - The FAISS index is GLOBAL (shared across all users for the same repo).
+    - If any user has previously indexed a repo, subsequent users load instantly from disk.
+    - Each user still gets their own DB record for history/tracking.
     """
     db_user = _get_or_create_db_user(db, current_user)
 
@@ -77,33 +79,36 @@ async def load_repo(
     repo_id = f"{owner}_{repo_name}"
     repo_path = DB_DIR / repo_id
 
-    # ── Check MySQL for existing record ──────────────────────
-    existing = (
-        db.query(Repository)
-        .filter(Repository.user_id == db_user.id, Repository.full_name == f"{owner}/{repo_name}")
-        .first()
-    )
+    # ── Stage 1: In-memory cache (fastest) ──────────────────────
+    if repo_id in _vectorstore_cache and repo_path.exists():
+        user_record = _ensure_user_repo_record(db, db_user, owner, repo_name, repo_path)
+        logger.info("Memory cache hit: %s/%s for user %s", owner, repo_name, db_user.email)
+        return {
+            "success": True,
+            "message": "Repository loaded from memory cache.",
+            "repository": f"{owner}/{repo_name}",
+            "files_indexed": user_record.files_indexed,
+            "metadata": _repo_to_metadata_dict(user_record),
+            "cached": True,
+        }
 
-    if existing and repo_path.exists():
+    # ── Stage 2: Disk cache (shared across all users) ───────────
+    if repo_path.exists():
         try:
             vectorstore = load_vector_store(repo_path)
             _vectorstore_cache[repo_id] = vectorstore
-
-            # Update last_accessed
-            existing.last_accessed = datetime.now(timezone.utc)
-            db.commit()
-
-            logger.info("Loaded %s/%s from cache for user %s", owner, repo_name, db_user.email)
+            user_record = _ensure_user_repo_record(db, db_user, owner, repo_name, repo_path)
+            logger.info("Disk cache hit: %s/%s for user %s", owner, repo_name, db_user.email)
             return {
                 "success": True,
-                "message": "Repository loaded from local cache.",
+                "message": "Repository loaded from disk cache.",
                 "repository": f"{owner}/{repo_name}",
-                "files_indexed": existing.files_indexed,
-                "metadata": _repo_to_metadata_dict(existing),
+                "files_indexed": user_record.files_indexed,
+                "metadata": _repo_to_metadata_dict(user_record),
                 "cached": True,
             }
         except Exception as exc:
-            logger.warning("Cache corrupt for %s, re-indexing: %s", repo_id, exc)
+            logger.warning("Disk cache corrupt for %s, re-indexing: %s", repo_id, exc)
 
     # ── Fetch metadata from GitHub ────────────────────────────
     metadata, meta_error = fetch_repo_metadata(owner, repo_name)

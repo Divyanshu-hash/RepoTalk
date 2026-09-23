@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_DAYS: int = 7
 
-    # MySQL database
-    DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/repotalk"
+    # Database
+    DATABASE_URL: str = "mysql+pymysql://root:@localhost:3306/repotalk"
 
     # AI / LLM
     GROQ_API_KEY: str = ""
