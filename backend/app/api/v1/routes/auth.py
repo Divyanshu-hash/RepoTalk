@@ -107,31 +107,8 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         }
     )
 
-    # ── In development: return token as JSON so you can copy it easily ────────
-    # ── In production: redirect to frontend ──────────────────────────────────
-    if settings.ENVIRONMENT == "development":
-        from fastapi.responses import HTMLResponse
-        html = f"""
-        <html>
-        <head><title>RepoTalk — Dev Token</title></head>
-        <body style="font-family:monospace;background:#0f0f0f;color:#00ff88;padding:2rem;">
-            <h2>✅ Login Successful — Copy your token below</h2>
-            <p style="color:#aaa;">Paste this into Swagger UI → 🔒 Authorize → <code>Bearer &lt;token&gt;</code></p>
-            <textarea rows="6" style="width:100%;background:#1a1a1a;color:#00ff88;border:1px solid #333;padding:1rem;font-size:0.85rem;border-radius:8px;"
-                onclick="this.select()">{jwt_token}</textarea>
-            <br/><br/>
-            <p style="color:#aaa;">
-                Swagger UI: <a href="/docs" style="color:#00aaff;">/docs</a> &nbsp;|&nbsp;
-                Frontend URL: <a href="{settings.FRONTEND_URL}/auth/callback?token={jwt_token}" style="color:#00aaff;">{settings.FRONTEND_URL}</a>
-            </p>
-            <p style="color:#555;font-size:0.75rem;">User: {google_user.get("email")} | Expires in {settings.ACCESS_TOKEN_EXPIRE_DAYS} days</p>
-        </body>
-        </html>
-        """
-        return HTMLResponse(content=html)
-
     return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/auth/callback?token={jwt_token}"
+        url=f"{settings.FRONTEND_URL}/?token={jwt_token}"
     )
 
 
