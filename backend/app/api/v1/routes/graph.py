@@ -801,6 +801,7 @@ async def generate_stream(parsed: GenerateRequest, request: Request):
                 explanation=explanation,
                 graph=valid_graph.model_dump(by_alias=True),
                 diagram=diagram,
+                used_own_key=False,
                 stargazer_count=getattr(github_data, "stargazer_count", None),
             )
 

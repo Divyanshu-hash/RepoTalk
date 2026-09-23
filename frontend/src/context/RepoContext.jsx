@@ -18,6 +18,12 @@ export function RepoProvider({ children }) {
   const [analysis, setAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
+  // Diagram State (Architecture tab — Mermaid diagram)
+  const [diagramData, setDiagramData] = useState(null); // { diagram, explanation, graph }
+  const [diagramLoading, setDiagramLoading] = useState(false);
+  const [diagramError, setDiagramError] = useState(null);
+  const [diagramProgress, setDiagramProgress] = useState(''); // SSE progress message
+
   const loadRepo = async (url) => {
     setLoading(true);
     setLoadingMessage('Fetching repository files...');
@@ -34,6 +40,12 @@ export function RepoProvider({ children }) {
       });
 
       const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.detail || data.error || 'An error occurred while loading the repository.');
+        setLoading(false);
+        return;
+      }
 
       if (data.error) {
         setError(data.error);
@@ -77,6 +89,10 @@ export function RepoProvider({ children }) {
     setMetadata(null);
     setActiveTab('overview');
     setAnalysis(null);
+    setDiagramData(null);
+    setDiagramLoading(false);
+    setDiagramError(null);
+    setDiagramProgress('');
   };
 
   return (
@@ -94,7 +110,15 @@ export function RepoProvider({ children }) {
       analysis,
       setAnalysis,
       analysisLoading,
-      generateAnalysis
+      generateAnalysis,
+      diagramData,
+      setDiagramData,
+      diagramLoading,
+      setDiagramLoading,
+      diagramError,
+      setDiagramError,
+      diagramProgress,
+      setDiagramProgress
     }}>
       {children}
     </RepoContext.Provider>

@@ -1,306 +1,335 @@
-import { useEffect, useRef, useState } from 'react'
-import * as d3 from 'd3'
+import { useEffect, useRef, useCallback, useState } from 'react'
+import mermaid from 'mermaid'
 import { useAuth } from '../context/AuthContext'
+import { useRepo } from '../context/RepoContext'
+
+// Initialize mermaid with dark theme
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  themeVariables: {
+    darkMode: true,
+    background: '#0f1021',
+    primaryColor: '#3b3d6e',
+    primaryTextColor: '#e2e8f0',
+    primaryBorderColor: '#5c7cfa',
+    secondaryColor: '#1e1e35',
+    secondaryTextColor: '#94a3b8',
+    secondaryBorderColor: '#4a4a6a',
+    tertiaryColor: '#15152a',
+    lineColor: '#5c7cfa',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: '14px',
+    nodeBorder: '#5c7cfa',
+    clusterBkg: 'rgba(92, 124, 250, 0.08)',
+    clusterBorder: 'rgba(92, 124, 250, 0.3)',
+    titleColor: '#e2e8f0',
+    edgeLabelBackground: '#1a1a2e',
+  },
+  flowchart: {
+    htmlLabels: true,
+    curve: 'basis',
+    padding: 16,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    useMaxWidth: true,
+  },
+  securityLevel: 'loose',
+})
+
+const PROGRESS_STEPS = [
+  { key: 'started', label: 'Starting generation…', icon: '🚀' },
+  { key: 'explanation', label: 'Analyzing repository architecture…', icon: '🔍' },
+  { key: 'graph', label: 'Planning architecture graph…', icon: '🧩' },
+  { key: 'diagram_compiling', label: 'Compiling Mermaid diagram…', icon: '⚙️' },
+  { key: 'complete', label: 'Diagram ready!', icon: '✅' },
+]
+
+function getStepIndex(status) {
+  if (!status) return -1
+  if (status.includes('explanation')) return 1
+  if (status.includes('graph')) return 2
+  if (status.includes('diagram')) return 3
+  if (status === 'complete') return 4
+  if (status === 'started') return 0
+  return -1
+}
 
 export default function RepoGraph({ apiBase }) {
   const { token } = useAuth()
-  const svgRef = useRef(null)
-  const tooltipRef = useRef(null)
-  const containerRef = useRef(null)
-  const simulationRef = useRef(null)
-  const lastDimensions = useRef({ width: 0, height: 0 })
-  const resizeTimeout = useRef(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [graphData, setGraphData] = useState(null)
+  const {
+    metadata,
+    diagramData, setDiagramData,
+    diagramLoading, setDiagramLoading,
+    diagramError, setDiagramError,
+    diagramProgress, setDiagramProgress,
+  } = useRepo()
 
-  useEffect(() => {
-    fetchAndRender()
-  }, []) // Only fetch once on mount
+  const diagramRef = useRef(null)
+  const abortRef = useRef(null)
+  const [showExplanation, setShowExplanation] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const renderIdRef = useRef(0)
 
-  useEffect(() => {
-    if (!graphData) return
+  // Extract owner/repo from metadata
+  const getOwnerRepo = useCallback(() => {
+    if (!metadata?.full_name) return null
+    const parts = metadata.full_name.split('/')
+    if (parts.length < 2) return null
+    return { username: parts[0], repo: parts[1] }
+  }, [metadata])
 
-    // Resize observer to handle display: none -> block transitions
-    // and initial render once data is ready
-    const resizeObserver = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect
-      if (width === 0) return // Still hidden
+  // Render Mermaid diagram into the container
+  const renderMermaid = useCallback(async (diagramCode) => {
+    if (!diagramRef.current || !diagramCode) return
 
-      const horizontalChange = Math.abs(width - lastDimensions.current.width) > 20
-      const verticalChange = Math.abs(height - lastDimensions.current.height) > 20
-      const wasHidden = lastDimensions.current.width === 0 && width > 0
-
-      if (horizontalChange || verticalChange || wasHidden) {
-        if (resizeTimeout.current) clearTimeout(resizeTimeout.current)
-        resizeTimeout.current = setTimeout(() => {
-          renderGraph(graphData)
-          lastDimensions.current = { width, height }
-        }, 150)
-      }
-    })
-
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current)
-    }
-
-    return () => {
-      resizeObserver.disconnect()
-      if (resizeTimeout.current) clearTimeout(resizeTimeout.current)
-      if (simulationRef.current) simulationRef.current.stop()
-      if (svgRef.current) {
-        d3.select(svgRef.current).selectAll('*').remove()
-      }
-    }
-  }, [graphData])
-
-  const fetchAndRender = async () => {
     try {
-      const res = await fetch(`${apiBase}/repo/structure`, {
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      })
-      const data = await res.json()
+      renderIdRef.current += 1
+      const id = `mermaid-diagram-${renderIdRef.current}`
+      const { svg } = await mermaid.render(id, diagramCode)
+      if (diagramRef.current) {
+        diagramRef.current.innerHTML = svg
 
-      if (data.error) {
-        setError(data.error)
-        setLoading(false)
-        return
+        // Make SVG responsive
+        const svgEl = diagramRef.current.querySelector('svg')
+        if (svgEl) {
+          svgEl.style.maxWidth = '100%'
+          svgEl.style.height = 'auto'
+          svgEl.removeAttribute('height')
+        }
+      }
+    } catch (err) {
+      console.error('Mermaid render error:', err)
+      if (diagramRef.current) {
+        diagramRef.current.innerHTML = `<pre class="mermaid-error-code">${diagramCode}</pre>`
+      }
+    }
+  }, [])
+
+  // Re-render when diagramData changes or component mounts with cached data
+  useEffect(() => {
+    if (diagramData?.diagram) {
+      renderMermaid(diagramData.diagram)
+    }
+  }, [diagramData, renderMermaid])
+
+  // Generate diagram via SSE
+  const generateDiagram = useCallback(async () => {
+    const ownerRepo = getOwnerRepo()
+    if (!ownerRepo) {
+      setDiagramError('Could not determine repository owner/name.')
+      return
+    }
+
+    // Abort any in-flight generation
+    if (abortRef.current) {
+      abortRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    setDiagramLoading(true)
+    setDiagramError(null)
+    setDiagramProgress('Connecting…')
+    setDiagramData(null)
+
+    try {
+      const res = await fetch(`${apiBase}/generate/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          username: ownerRepo.username,
+          repo: ownerRepo.repo,
+        }),
+        signal: controller.signal,
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || errData.error || `Server error (${res.status})`)
       }
 
-      setLoading(false)
-      setGraphData(data)
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const jsonStr = line.slice(6).trim()
+          if (!jsonStr) continue
+
+          try {
+            const event = JSON.parse(jsonStr)
+
+            if (event.status === 'error') {
+              throw new Error(event.error || 'Diagram generation failed.')
+            }
+
+            // Update progress message
+            if (event.message) {
+              setDiagramProgress(event.message)
+            }
+
+            if (event.status === 'complete') {
+              setDiagramData({
+                diagram: event.diagram,
+                explanation: event.explanation,
+                graph: event.graph,
+              })
+              setDiagramProgress('')
+              setDiagramLoading(false)
+              return
+            }
+          } catch (parseErr) {
+            if (parseErr.message && !parseErr.message.includes('JSON')) {
+              throw parseErr
+            }
+          }
+        }
+      }
+
+      // If we exit the loop without a 'complete' event
+      if (!diagramData) {
+        throw new Error('Stream ended without a complete diagram.')
+      }
     } catch (err) {
-      setError('Failed to load repository structure')
-      setLoading(false)
+      if (err.name === 'AbortError') return
+      console.error('Diagram generation error:', err)
+      setDiagramError(err.message || 'Failed to generate diagram.')
+      setDiagramLoading(false)
+      setDiagramProgress('')
     }
-  }
+  }, [apiBase, token, getOwnerRepo, setDiagramData, setDiagramLoading, setDiagramError, setDiagramProgress])
 
-  const renderGraph = (data) => {
-    if (!containerRef.current || !data) return
-    
-    const svg = d3.select(svgRef.current)
-    
-    // STOP existing simulation before starting a new one
-    if (simulationRef.current) {
-      simulationRef.current.stop()
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort()
     }
-    
-    svg.selectAll('*').remove() // Clear previous render
+  }, [])
 
-    const container = containerRef.current
-    const tooltip = d3.select(tooltipRef.current)
+  // Zoom handlers
+  const handleZoomIn = () => setZoom(z => Math.min(z + 0.25, 3))
+  const handleZoomOut = () => setZoom(z => Math.max(z - 0.25, 0.25))
+  const handleZoomReset = () => setZoom(1)
 
-    if (!container) return
+  const currentStepIndex = getStepIndex(
+    diagramLoading ? (diagramProgress || 'started') : diagramData ? 'complete' : ''
+  )
 
-    const width = container.clientWidth
-    const height = 600
-
-    svg.attr('viewBox', `0 0 ${width} ${height}`)
-
-    // Limit nodes for performance
-    let nodes = data.nodes
-    let edges = data.edges
-
-    if (nodes.length > 300) {
-      // Keep directories plus a sample of files
-      const dirs = nodes.filter(n => n.type === 'directory' || n.type === 'root')
-      const files = nodes.filter(n => n.type === 'file').slice(0, 200)
-      const keepIds = new Set([...dirs, ...files].map(n => n.id))
-      nodes = nodes.filter(n => keepIds.has(n.id))
-      edges = edges.filter(e => keepIds.has(e.source) && keepIds.has(e.target))
-    }
-
-    // Color map for file extensions
-    const fileColors = {
-      js: '#f1e05a', jsx: '#f1e05a',
-      ts: '#3178c6', tsx: '#3178c6',
-      py: '#3572A5',
-      html: '#e34c26',
-      css: '#563d7c',
-      json: '#cb3837',
-      md: '#083fa1',
-      // default
-      unknown: '#74b9ff'
-    }
-
-    const getNodeColor = (d) => {
-      if (d.type === 'root') return '#6c5ce7'
-      if (d.type === 'directory') return '#fdcb6e'
-      
-      const ext = d.name.split('.').pop().toLowerCase()
-      return fileColors[ext] || fileColors.unknown
-    }
-
-    const nodeSizeMap = {
-      root: 18,
-      directory: 12,
-      file: 8,
-    }
-
-    // Create the simulation
-    const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(edges).id(d => d.id).distance(d => {
-        const sourceType = typeof d.source === 'object' ? d.source.type : 'file'
-        return sourceType === 'root' ? 250 : sourceType === 'directory' ? 120 : 60
-      }))
-      .force('charge', d3.forceManyBody().strength(d => d.type === 'root' ? -1000 : d.type === 'directory' ? -400 : -100))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(d => (nodeSizeMap[d.type] || 8) + 35))
-      .velocityDecay(0.45) // Slower, calmer movement
-
-    simulationRef.current = simulation
-
-    // Add zoom
-    const g = svg.append('g')
-
-    svg.call(d3.zoom()
-      .scaleExtent([0.1, 4])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform)
-      })
-    )
-
-    // Draw edges
-    const link = g.append('g')
-      .selectAll('line')
-      .data(edges)
-      .join('line')
-      .attr('stroke', 'rgba(255,255,255,0.08)')
-      .attr('stroke-width', 1)
-
-    // Node groups (to hold circle + text)
-    const nodeGroup = g.append('g')
-      .selectAll('g')
-      .data(nodes)
-      .join('g')
-      .style('cursor', 'pointer')
-      .call(d3.drag()
-        .on('start', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.3).restart()
-          d.fx = d.x
-          d.fy = d.y
-        })
-        .on('drag', (event, d) => {
-          d.fx = event.x
-          d.fy = event.y
-        })
-        .on('end', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0)
-          d.fx = null
-          d.fy = null
-        })
-      )
-
-    // Draw circles
-    nodeGroup.append('circle')
-      .attr('r', d => nodeSizeMap[d.type] || 6)
-      .attr('fill', d => getNodeColor(d))
-      .attr('stroke', d => d.type === 'root' ? 'rgba(108,92,231,0.5)' : 'none')
-      .attr('stroke-width', d => d.type === 'root' ? 4 : 0)
-
-    // Draw labels (only for root, dirs, and top files to prevent clutter)
-    nodeGroup.append('text')
-      .text(d => d.name)
-      .attr('x', d => nodeSizeMap[d.type] + 4)
-      .attr('y', 4)
-      .style('font-size', d => d.type === 'root' ? '14px' : d.type === 'directory' ? '12px' : '10px')
-      .style('font-family', 'Inter, sans-serif')
-      .style('font-weight', d => d.type === 'root' ? 'bold' : 'normal')
-      .style('fill', d => d.type === 'root' || d.type === 'directory' ? '#e2e8f0' : '#94a3b8')
-      .style('opacity', d => d.type === 'file' ? 0.7 : 1)
-      .style('pointer-events', 'none')
-
-    // Hover effects
-    nodeGroup.on('mouseover', function(event, d) {
-      d3.select(this).select('circle')
-        .transition().duration(150)
-        .attr('r', (nodeSizeMap[d.type] || 6) * 1.5)
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 2)
-
-      d3.select(this).select('text')
-        .transition().duration(150)
-        .style('fill', '#fff')
-        .style('opacity', 1)
-
-      tooltip
-        .style('opacity', 1)
-        .style('left', `${event.offsetX + 15}px`)
-        .style('top', `${event.offsetY - 20}px`)
-        .text(d.id)
-    })
-    .on('mouseout', function(event, d) {
-      d3.select(this).select('circle')
-        .transition().duration(150)
-        .attr('r', nodeSizeMap[d.type] || 6)
-        .attr('stroke', d.type === 'root' ? 'rgba(108,92,231,0.5)' : 'none')
-        .attr('stroke-width', d.type === 'root' ? 4 : 0)
-
-      d3.select(this).select('text')
-        .transition().duration(150)
-        .style('fill', d.type === 'root' || d.type === 'directory' ? '#e2e8f0' : '#94a3b8')
-        .style('opacity', d.type === 'file' ? 0.7 : 1)
-
-      tooltip.style('opacity', 0)
-    })
-
-    // Run simulation
-    simulation.on('tick', () => {
-      link
-        .attr('x1', d => d.source.x)
-        .attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x)
-        .attr('y2', d => d.target.y)
-
-      nodeGroup.attr('transform', d => `translate(${d.x},${d.y})`)
-    })
-  }
-
+  // ─── Render ───────────────────────────────────────────────
   return (
-    <div className="graph-container">
-      <div className="graph-toolbar">
-        <h3>🕸️ Repository Structure</h3>
-        <div className="legend">
-          <div className="legend-item">
-            <span className="legend-dot root" style={{ background: '#6c5ce7' }}></span> Root
-          </div>
-          <div className="legend-item">
-            <span className="legend-dot directory" style={{ background: '#fdcb6e' }}></span> Folder
-          </div>
-          <div className="legend-item" style={{marginLeft: 10, paddingLeft: 10, borderLeft: '1px solid rgba(255,255,255,0.1)'}}>
-            <span className="legend-dot file" style={{ background: '#f1e05a' }}></span> JS/TS
-          </div>
-          <div className="legend-item">
-            <span className="legend-dot file" style={{ background: '#3572A5' }}></span> Python
-          </div>
-          <div className="legend-item">
-            <span className="legend-dot file" style={{ background: '#e34c26' }}></span> HTML
-          </div>
-          <div className="legend-item">
-            <span className="legend-dot file" style={{ background: '#74b9ff' }}></span> Other
-          </div>
+    <div className="diagram-container">
+      {/* Toolbar */}
+      <div className="diagram-toolbar">
+        <h3>🏗️ Architecture Diagram</h3>
+        <div className="diagram-toolbar-actions">
+          {diagramData && (
+            <>
+              <button
+                className="diagram-btn explanation-toggle"
+                onClick={() => setShowExplanation(!showExplanation)}
+                title="Toggle explanation"
+              >
+                {showExplanation ? '📖 Hide Explanation' : '📖 Show Explanation'}
+              </button>
+              <div className="diagram-zoom-controls">
+                <button className="diagram-btn zoom-btn" onClick={handleZoomOut} title="Zoom out">−</button>
+                <span className="zoom-level">{Math.round(zoom * 100)}%</span>
+                <button className="diagram-btn zoom-btn" onClick={handleZoomIn} title="Zoom in">+</button>
+                <button className="diagram-btn zoom-btn" onClick={handleZoomReset} title="Reset zoom">↺</button>
+              </div>
+            </>
+          )}
+          <button
+            className="diagram-btn generate-btn"
+            onClick={generateDiagram}
+            disabled={diagramLoading}
+          >
+            {diagramLoading ? '⏳ Generating…' : diagramData ? '🔄 Regenerate' : '✨ Generate Diagram'}
+          </button>
         </div>
       </div>
 
-      <div className="graph-svg-wrapper" ref={containerRef}>
-        {loading && (
-          <div className="graph-loading">
-            <div className="loading-spinner"></div>
-            <p>Building repository graph...</p>
+      {/* Explanation Panel */}
+      {showExplanation && diagramData?.explanation && (
+        <div className="diagram-explanation">
+          <div className="explanation-header">
+            <h4>📋 Architecture Explanation</h4>
+            <button className="diagram-btn close-btn" onClick={() => setShowExplanation(false)}>✕</button>
           </div>
-        )}
-
-        {error && (
-          <div className="graph-loading">
-            <p>⚠️ {error}</p>
+          <div className="explanation-content">
+            {diagramData.explanation}
           </div>
-        )}
+        </div>
+      )}
 
-        <svg ref={svgRef}></svg>
-        <div className="graph-tooltip" ref={tooltipRef}></div>
-      </div>
+      {/* Progress Steps */}
+      {diagramLoading && (
+        <div className="diagram-progress">
+          <div className="progress-steps">
+            {PROGRESS_STEPS.map((step, i) => (
+              <div
+                key={step.key}
+                className={`progress-step ${
+                  i < currentStepIndex ? 'completed' :
+                  i === currentStepIndex ? 'active' : 'pending'
+                }`}
+              >
+                <span className="step-icon">{step.icon}</span>
+                <span className="step-label">{step.label}</span>
+                {i === currentStepIndex && <span className="step-spinner" />}
+              </div>
+            ))}
+          </div>
+          <div className="progress-message">{diagramProgress}</div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {diagramError && (
+        <div className="diagram-error">
+          <div className="error-icon">⚠️</div>
+          <p className="error-message">{diagramError}</p>
+          <button className="diagram-btn generate-btn" onClick={generateDiagram}>
+            🔄 Retry
+          </button>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!diagramData && !diagramLoading && !diagramError && (
+        <div className="diagram-empty">
+          <div className="empty-icon">🏗️</div>
+          <h4>Architecture Diagram</h4>
+          <p>Generate an AI-powered architecture diagram that shows the real components, data flows, and structure of this repository.</p>
+          <button className="diagram-btn generate-btn primary" onClick={generateDiagram}>
+            ✨ Generate Architecture Diagram
+          </button>
+        </div>
+      )}
+
+      {/* Mermaid Diagram */}
+      {diagramData?.diagram && (
+        <div className="diagram-viewport" style={{ overflow: 'auto' }}>
+          <div
+            className="diagram-canvas"
+            ref={diagramRef}
+            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+          />
+        </div>
+      )}
     </div>
   )
 }
