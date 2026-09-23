@@ -8,9 +8,12 @@ from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
+
+from app.db.session import SessionLocal
+from app.db.models.DiagramCache import DiagramCache
 
 from app.core.observability import Timer, log_event
 from app.prompts import SYSTEM_FIRST_PROMPT, SYSTEM_GRAPH_PROMPT
@@ -271,6 +274,28 @@ async def generate_stream(parsed: GenerateRequest, request: Request):
 
     async def event_generator():
         timer = Timer()
+        full_repo_name = f"{parsed.username.strip().lower()}/{parsed.repo.strip().lower()}"
+        
+        # Check cache early
+        with SessionLocal() as db:
+            cached_diagram = db.query(DiagramCache).filter(DiagramCache.full_name == full_repo_name).first()
+            if cached_diagram:
+                yield _sse_message(
+                    {
+                        "status": "complete",
+                        "session_id": "cached",
+                        "cost_summary": None,
+                        "diagram": cached_diagram.diagram,
+                        "explanation": cached_diagram.explanation,
+                        "graph": cached_diagram.graph,
+                        "graph_attempts": [],
+                        "latest_session_audit": None,
+                        "generated_at": cached_diagram.created_at.isoformat(),
+                        "message": "Loaded from cache"
+                    }
+                )
+                return
+
         provider = get_provider()
         model = get_model(provider)
         audit = _create_session_audit(session_id=str(uuid4()), provider=provider, model=model)
@@ -797,6 +822,21 @@ async def generate_stream(parsed: GenerateRequest, request: Request):
             )
             audit = _set_final_cost(audit, final_cost)
             audit = _set_success(_timeline(audit, "complete", "Diagram generation complete."))
+            
+            # Save to Database Cache
+            try:
+                with SessionLocal() as db:
+                    new_cache = DiagramCache(
+                        full_name=full_repo_name,
+                        diagram=diagram,
+                        explanation=explanation,
+                        graph=valid_graph.model_dump(by_alias=True)
+                    )
+                    db.add(new_cache)
+                    db.commit()
+            except Exception as e:
+                log_event("generate.cache_save_failed", error=str(e))
+                
             await persist_successful_state(
                 explanation=explanation,
                 graph=valid_graph.model_dump(by_alias=True),

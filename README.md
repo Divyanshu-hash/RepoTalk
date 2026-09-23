@@ -8,8 +8,8 @@ It also features an **AI-powered architecture diagram generator** that visualize
 
 - **Chat with Codebases**: Ask questions about the repo architecture, files, or specific issues.
 - **RAG Architecture**: Uses FAISS and HuggingFace sentence-transformers (`all-MiniLM-L6-v2`) to retrieve the most relevant code chunks for context.
-- **Interactive Repository Graph**: Visualize the repo's file structure with an interactive force-directed D3 graph.
-- **Mermaid AI Analysis**: Automatically generate architectural diagrams and sequence diagrams to understand data flow.
+- **AI Architecture Diagram**: Visualize the repo's architecture in real-time with an interactive Mermaid flowchart, generated via LLMs and streamed to the client using Server-Sent Events (SSE).
+- **Global Diagram Caching**: Architecture diagrams are cached globally in a MySQL database to enable instant loads and save LLM token costs for all users accessing the same repository.
 - **Google OAuth**: Secure login flow with JSON Web Tokens (JWT).
 - **Issue-Aware Mode**: Ask about a specific GitHub issue (e.g., "explain issue #42") and RepoTalk will pull the issue context automatically.
 
@@ -54,11 +54,15 @@ graph TD
     
     CO -->|/chat| RepoR
     RO -->|/analysis| RepoR
-    RG -->|/structure| RepoR
+    RG -->|/generate/stream| GraphR
     
     RepoR --> GH
     RepoR --> MySQL
     RepoR --> GroqAPI
+    
+    GraphR --> GH
+    GraphR --> GroqAPI
+    GraphR --> MySQL
 ```
 
 ## ⚙️ Setup Instructions

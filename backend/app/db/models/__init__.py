@@ -4,5 +4,6 @@
 from app.db.models.User import User
 from app.db.models.Repository import Repository
 from app.db.models.ChatHistory import ChatHistory
+from app.db.models.DiagramCache import DiagramCache
 
-__all__ = ["User", "Repository", "ChatHistory"]
+__all__ = ["User", "Repository", "ChatHistory", "DiagramCache"]

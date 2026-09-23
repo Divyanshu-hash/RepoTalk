@@ -117,20 +117,17 @@ graph TD
 3. Asks the LLM to produce a structured analysis with **two Mermaid diagrams**
 4. Frontend renders Markdown + detects `mermaid` code blocks → renders them via Mermaid.js
 
-### 4.4 Repository Graph (`/repo-structure`)
-1. User switches to the "Architecture" tab
-2. Frontend calls `GET /repo-structure` on the **legacy** API
-3. Backend fetches the full file tree from GitHub and builds a node/edge graph
-4. Frontend renders an interactive force-directed D3.js graph with zoom, drag, and tooltips
-
-### 4.5 Diagram Generation (`/api/v1/generate/stream`) — New Backend Only
-1. An SSE streaming endpoint that generates a **Mermaid architecture diagram** from a repo
-2. Fetches GitHub data (file tree + README)
-3. Sends to LLM in two stages: explanation → structured graph plan
-4. Validates the graph, retries up to 3 times
-5. Compiles into Mermaid syntax, validates syntax
-6. Streams progress/results via Server-Sent Events
-7. Persists results to R2 cloud storage (optional)
+### 4.4 Architecture Diagram (`/api/v1/generate/stream`)
+1. User switches to the "Architecture" tab and clicks Generate.
+2. Frontend connects to the new SSE streaming endpoint `/api/v1/generate/stream`.
+3. Backend checks the global `DiagramCache` (MySQL) to see if the diagram was already generated for this repo. If so, it instantly returns the cached Mermaid diagram, skipping LLM calls.
+4. If not cached, it fetches GitHub data (file tree + README).
+5. Sends data to the Groq LLM (e.g. `openai/gpt-oss-20b`) in two stages: explanation → structured graph plan.
+6. Validates the graph (retries up to 3 times if invalid).
+7. Compiles into Mermaid syntax, validates syntax via an external Node.js script.
+8. Streams progress and results to the frontend via Server-Sent Events (SSE).
+9. Frontend renders the interactive Mermaid flowchart with panning, zooming, and a collapsible explanation panel.
+10. The backend caches the successful diagram into the `DiagramCache` MySQL table for future requests.
 
 ### 4.6 Google OAuth Authentication — New Backend Only
 1. `GET /api/v1/auth/google` redirects user to Google consent page
@@ -171,38 +168,19 @@ graph TD
 - The new backend at `backend/app/main.py` serves routes under `/api/v1/repo/*` and `/api/v1/auth/*` — **the frontend never calls these**
 - **Impact**: All user auth, MySQL persistence, chat history, and per-user repos are **completely unused** by the frontend
 
-#### 6.2 `persist_successful_state` Missing Required Parameter
+#### 6.2 `persist_successful_state` Missing Required Parameter (✅ Resolved)
 
-In [graph.py L800-805](file:///d:/RepoTalk/backend/app/api/v1/routes/graph.py#L800-L805):
-```python
-await persist_successful_state(
-    explanation=explanation,
-    graph=valid_graph.model_dump(by_alias=True),
-    diagram=diagram,
-    stargazer_count=getattr(github_data, "stargazer_count", None),
-)
-```
-But the function signature at [L304-L311](file:///d:/RepoTalk/backend/app/api/v1/routes/graph.py#L304-L311) requires `used_own_key`:
-```python
-async def persist_successful_state(
-    *, explanation, graph, diagram, used_own_key, stargazer_count
-)
-```
-**Impact**: This will raise a `TypeError` every time diagram generation succeeds, causing the persistence step to silently fail.
+- **Status:** Fixed. The missing `used_own_key` argument has been correctly added to the `persist_successful_state` call.
 
-#### 6.3 `estimate` Variable Used But Never Defined
+#### 6.3 `estimate` Variable Used But Never Defined (✅ Resolved)
 
-In [graph.py L793-L796](file:///d:/RepoTalk/backend/app/api/v1/routes/graph.py#L793-L796):
-```python
-else:
-    {
-        **estimate["cost_summary"],  # ← 'estimate' is NEVER defined
-        ...
-    }
-```
-**Impact**: If `has_complete_measured_usage` is False, this raises a `NameError` at runtime.
+- **Status:** Fixed. The `NameError` caused by referencing an undefined `estimate` variable has been replaced with `audit.get("estimatedCost", {})`.
 
-#### 6.4 Global Mutable State in Legacy Backend (No Multi-User Support)
+#### 6.4 Diagram Generation Model Deprecation (✅ Resolved)
+
+- **Status:** Fixed. The previously hardcoded `llama-3.3-70b-versatile` and `llama3-70b-8192` models were returning 404 errors. The configuration has been updated to use `openai/gpt-oss-20b`, matching the currently active models mapped to the backend's API environment.
+
+#### 6.5 Global Mutable State in Legacy Backend (No Multi-User Support)
 
 [app.py L38-41](file:///d:/RepoTalk/app.py#L38-L41) uses **global variables** for the currently loaded repo:
 ```python
@@ -217,7 +195,7 @@ repo_documents_cache = []
 
 ### 🟠 Significant Issues
 
-#### 6.5 `get_model()` Can Return `None`
+#### 6.6 `get_model()` Can Return `None`
 
 In [model_config.py L33-39](file:///d:/RepoTalk/backend/app/services/model_config.py#L33-L39):
 ```python
@@ -230,7 +208,7 @@ def get_model(provider: AIProvider | None = None) -> str:
 ```
 While this currently works because it falls through to the same default, the `AIProvider` literal only allows `"groq"` — the dead code after the `if` is confusing and error-prone if new providers are added.
 
-#### 6.6 Hardcoded LLM Model in Legacy `app.py` Is Wrong/Outdated
+#### 6.7 Hardcoded LLM Model in Legacy `app.py` Is Wrong/Outdated
 
 [app.py L46](file:///d:/RepoTalk/app.py#L46) uses:
 ```python
@@ -238,11 +216,11 @@ model_name="meta-llama/llama-4-maverick-17b-128e-instruct"
 ```
 This model may not be available on Groq's free tier or could be deprecated. The new backend uses `llama-3.3-70b-versatile`, creating inconsistency.
 
-#### 6.7 No Error Handling for GitHub Rate Limits
+#### 6.8 No Error Handling for GitHub Rate Limits
 
 The GitHub API calls in [github_loader.py](file:///d:/RepoTalk/github_loader.py) and [github_service.py](file:///d:/RepoTalk/backend/app/services/github_service.py) don't specifically handle 403 rate-limit responses. Without a `GITHUB_TOKEN`, the rate limit is **60 requests/hour**, which is easily exhausted when fetching file contents concurrently.
 
-#### 6.8 `complimentary_gate.py` References "OpenAI" and "GitDiagram" — Identity Crisis
+#### 6.9 `complimentary_gate.py` References "OpenAI" and "GitDiagram" — Identity Crisis
 
 - [complimentary_gate.py L19-33](file:///d:/RepoTalk/backend/app/services/complimentary_gate.py#L19-L33) has messages like *"GitDiagram's free daily capacity..."* and references to "OpenAI" as a provider
 - [graph.py L362](file:///d:/RepoTalk/backend/app/api/v1/routes/graph.py#L362) checks `if provider != "openai"` but the only supported provider is `"groq"`
