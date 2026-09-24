@@ -39,9 +39,9 @@ export default function LandingPage() {
             )}
           </button>
           {user ? (
-            <div className="user-profile">
-              {user.picture && <img src={user.picture} alt="Profile" className="user-avatar" style={{width: 32, height: 32, borderRadius: '50%', marginLeft: 16}} />}
-              <button className="control-btn exit-btn" onClick={logout} style={{marginLeft: 16}}>
+            <div className="user-profile" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {user.picture && <img src={user.picture} alt="Profile" className="user-avatar" referrerPolicy="no-referrer" style={{width: 32, height: 32, borderRadius: '50%'}} />}
+              <button className="control-btn exit-btn" onClick={logout}>
                 Logout
               </button>
             </div>
