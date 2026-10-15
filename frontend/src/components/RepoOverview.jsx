@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import mermaid from 'mermaid'
 import { useRepo } from '../context/RepoContext'
 
@@ -139,6 +140,7 @@ export default function RepoOverview() {
         {!analysisLoading && analysis && (
           <div className="analysis-content">
             <Markdown
+              remarkPlugins={[remarkGfm]}
               components={{
                 h1({ node, children, ...props }) {
                   const id = slugify(children);
@@ -152,6 +154,19 @@ export default function RepoOverview() {
                   const id = slugify(children);
                   return <h3 id={id} {...props}>{children}</h3>;
                 },
+                table({ children }) {
+                  return (
+                    <div className="analysis-table-wrapper">
+                      <table className="analysis-table">{children}</table>
+                    </div>
+                  );
+                },
+                th({ children }) {
+                  return <th className="analysis-th">{children}</th>;
+                },
+                td({ children }) {
+                  return <td className="analysis-td">{children}</td>;
+                },
                 code({node, className, children, ...props}) {
                   const match = /language-(\w+)/.exec(className || '')
                   const isBlock = node?.position?.start?.line !== node?.position?.end?.line || match
@@ -159,7 +174,22 @@ export default function RepoOverview() {
                     return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />
                   }
                   return <code className={className} {...props}>{children}</code>
-                }
+                },
+                li({ children }) {
+                  return <li className="analysis-li">{children}</li>;
+                },
+                ul({ children }) {
+                  return <ul className="analysis-ul">{children}</ul>;
+                },
+                ol({ children }) {
+                  return <ol className="analysis-ol">{children}</ol>;
+                },
+                p({ children }) {
+                  return <p className="analysis-p">{children}</p>;
+                },
+                strong({ children }) {
+                  return <strong className="analysis-strong">{children}</strong>;
+                },
               }}
             >
               {analysis}

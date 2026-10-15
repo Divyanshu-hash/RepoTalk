@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAuth } from '../context/AuthContext'
 
 export default function ChatPanel({ apiBase }) {
@@ -88,9 +89,12 @@ export default function ChatPanel({ apiBase }) {
 
         {messages.map((msg, i) => (
           <div key={i} className={`message ${msg.role}`}>
+            {msg.role === 'assistant' && (
+              <div className="message-role-label">RepoTalk</div>
+            )}
             <div className="message-body">
               {msg.role === 'assistant' ? (
-                <Markdown>{msg.content}</Markdown>
+                <Markdown remarkPlugins={[remarkGfm]}>{msg.content}</Markdown>
               ) : (
                 msg.content
               )}
