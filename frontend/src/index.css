@@ -2453,10 +2453,10 @@ body {
   position: absolute;
   top: 60px;
   right: 24px;
-  width: 350px;
+  width: 420px;
   max-height: calc(100% - 84px);
-  background: rgba(15, 16, 33, 0.85);
-  backdrop-filter: blur(12px);
+  background: rgba(15, 16, 33, 0.92);
+  backdrop-filter: blur(16px);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   display: flex;
@@ -2530,6 +2530,71 @@ body {
 
 .explanation-content li {
   margin-bottom: 6px;
+}
+
+/* ── Explanation Markdown Classes ── */
+.exp-p {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.75;
+  font-size: 0.88rem;
+}
+
+.exp-p:last-child {
+  margin-bottom: 0;
+}
+
+.exp-strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.exp-h {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 1.1rem 0 0.5rem;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.exp-h:first-child {
+  margin-top: 0;
+}
+
+.exp-h3 {
+  color: var(--accent-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.9rem 0 0.4rem;
+}
+
+.exp-ul,
+.exp-ol {
+  margin: 0.25rem 0 0.75rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.exp-li {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.exp-li::marker {
+  color: var(--accent-primary);
+}
+
+.exp-code {
+  background: rgba(108, 92, 231, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  color: var(--accent-secondary);
 }
 
 /* Viewport and Canvas */

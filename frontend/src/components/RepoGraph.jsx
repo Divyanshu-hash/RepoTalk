@@ -1,5 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import mermaid from 'mermaid'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAuth } from '../context/AuthContext'
 import { useRepo } from '../context/RepoContext'
 
@@ -270,7 +272,22 @@ export default function RepoGraph({ apiBase }) {
             <button className="diagram-btn close-btn" onClick={() => setShowExplanation(false)}>✕</button>
           </div>
           <div className="explanation-content">
-            {diagramData.explanation}
+            <Markdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                p({ children }) { return <p className="exp-p">{children}</p>; },
+                strong({ children }) { return <strong className="exp-strong">{children}</strong>; },
+                ul({ children }) { return <ul className="exp-ul">{children}</ul>; },
+                ol({ children }) { return <ol className="exp-ol">{children}</ol>; },
+                li({ children }) { return <li className="exp-li">{children}</li>; },
+                h1({ children }) { return <h1 className="exp-h">{children}</h1>; },
+                h2({ children }) { return <h2 className="exp-h">{children}</h2>; },
+                h3({ children }) { return <h3 className="exp-h3">{children}</h3>; },
+                code({ children, className }) { return <code className={`exp-code ${className || ''}`}>{children}</code>; },
+              }}
+            >
+              {diagramData.explanation}
+            </Markdown>
           </div>
         </div>
       )}
