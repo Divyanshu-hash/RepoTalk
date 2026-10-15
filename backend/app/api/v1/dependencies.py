@@ -100,6 +100,7 @@ def get_llm() -> ChatGroq:
         _llm = ChatGroq(
             groq_api_key=groq_key,
             model_name="openai/gpt-oss-20b",
+            max_tokens=8192,
         )
     return _llm
 
