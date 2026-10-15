@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 
 const RepoContext = createContext();
@@ -14,19 +14,38 @@ export function RepoProvider({ children }) {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState(null);
 
-  // Analysis State Lifted from RepoOverview
   const [analysis, setAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
-  // Diagram State (Architecture tab — Mermaid diagram)
-  const [diagramData, setDiagramData] = useState(null); // { diagram, explanation, graph }
+  const [diagramData, setDiagramData] = useState(null);
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [diagramError, setDiagramError] = useState(null);
-  const [diagramProgress, setDiagramProgress] = useState(''); // SSE progress message
+  const [diagramProgress, setDiagramProgress] = useState('');
 
-  // Chat History State
   const [chatHistory, setChatHistory] = useState([]);
   const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
+
+  const [repoHistory, setRepoHistory] = useState([]);
+  const [repoHistoryLoading, setRepoHistoryLoading] = useState(false);
+
+  // Fetch repo history whenever token changes
+  useEffect(() => {
+    if (!token) { setRepoHistory([]); return; }
+    const fetchHistory = async () => {
+      setRepoHistoryLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/repo/history`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setRepoHistory(data.repositories || []);
+        }
+      } catch (_) {}
+      setRepoHistoryLoading(false);
+    };
+    fetchHistory();
+  }, [token]);
 
   const fetchChatHistory = async (authToken) => {
     const t = authToken || token;
@@ -40,9 +59,7 @@ export function RepoProvider({ children }) {
         const data = await res.json();
         setChatHistory(data.messages || []);
       }
-    } catch (err) {
-      // silently fail — chat history is non-critical
-    }
+    } catch (_) {}
     setChatHistoryLoading(false);
   };
 
@@ -54,7 +71,7 @@ export function RepoProvider({ children }) {
     try {
       const res = await fetch(`${API_BASE}/repo/load-repo`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
@@ -79,9 +96,21 @@ export function RepoProvider({ children }) {
       setRepoLoaded(true);
       setActiveTab('overview');
 
-      // Load previous chat history for this repo
+      // Refresh history so new repo appears on next landing
+      if (token) {
+        try {
+          const hr = await fetch(`${API_BASE}/repo/history`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (hr.ok) {
+            const hd = await hr.json();
+            setRepoHistory(hd.repositories || []);
+          }
+        } catch (_) {}
+      }
+
       await fetchChatHistory();
-    } catch (err) {
+    } catch (_) {
       setError('Failed to connect to backend. Make sure the server is running on port 8000.');
     }
 
@@ -91,11 +120,9 @@ export function RepoProvider({ children }) {
   const generateAnalysis = async () => {
     setAnalysisLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/repo/analysis`, { 
+      const res = await fetch(`${API_BASE}/repo/analysis`, {
         method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
       });
       const data = await res.json();
       if (data.error) {
@@ -103,7 +130,7 @@ export function RepoProvider({ children }) {
       } else {
         setAnalysis(data.analysis);
       }
-    } catch (err) {
+    } catch (_) {
       setAnalysis('⚠️ Failed to generate analysis. Please try again.');
     }
     setAnalysisLoading(false);
@@ -147,6 +174,8 @@ export function RepoProvider({ children }) {
       setDiagramProgress,
       chatHistory,
       chatHistoryLoading,
+      repoHistory,
+      repoHistoryLoading,
     }}>
       {children}
     </RepoContext.Provider>
