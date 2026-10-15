@@ -16,10 +16,17 @@ export default function WikiPage() {
     const lines = analysis.split('\n');
     const extracted = [];
     for (const line of lines) {
-      const match = line.match(/^(#{2,3})\s+(.+)$/);
+      const match = line.match(/^(#{1,3})\s+(.+)$/);
       if (match) {
-        const level = match[1].length;
-        const text = match[2].replace(/\*+/g, '').trim();
+        const level = Math.min(match[1].length, 3);
+        // Strip markdown bold/italic, emoji, and leading numbers like "1. "
+        const text = match[2]
+          .replace(/\*+/g, '')
+          .replace(/^\d+\.\s*/, '')
+          // Strip emoji (Unicode ranges)
+          .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+          .trim();
+        if (!text) continue;
         const id = text
           .toLowerCase()
           .replace(/\s+/g, '-')
@@ -27,7 +34,7 @@ export default function WikiPage() {
           .replace(/--+/g, '-')
           .replace(/^-+/, '')
           .replace(/-+$/, '');
-        extracted.push({ id, text, level });
+        if (id) extracted.push({ id, text, level });
       }
     }
     return extracted;
@@ -119,7 +126,11 @@ export default function WikiPage() {
             </span>
           </div>
           <a href={metadata.html_url} target="_blank" rel="noreferrer" className="github-link">
-            View on GitHub ↗
+            <span className="github-link-label">External</span>
+            View on website
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" style={{opacity:0.7}}>
+              <path d="M6.22 3.22a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 010-1.06z"/>
+            </svg>
           </a>
         </div>
 

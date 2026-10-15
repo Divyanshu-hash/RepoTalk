@@ -134,6 +134,12 @@ export default function ChatPanel({ apiBase }) {
       </div>
 
       <div className="chat-footer-wiki">
+        {/* Sparkle decoration */}
+        <div className="chat-footer-sparkle" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12 0 L13 11 L24 12 L13 13 L12 24 L11 13 L0 12 L11 11 Z" />
+          </svg>
+        </div>
         <form onSubmit={handleSubmit} className="chat-input-pill">
           <input
             type="text"
@@ -143,7 +149,7 @@ export default function ChatPanel({ apiBase }) {
             disabled={loading}
           />
           <button type="submit" className="send-btn-wiki" disabled={loading || !input.trim()}>
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
           </button>
