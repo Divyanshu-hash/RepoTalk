@@ -286,7 +286,9 @@ export default function RepoGraph({ apiBase }) {
                 code({ children, className }) { return <code className={`exp-code ${className || ''}`}>{children}</code>; },
               }}
             >
-              {diagramData.explanation}
+              {diagramData.explanation
+                .replace(/<\/?explanation>/gi, '')
+                .trim()}
             </Markdown>
           </div>
         </div>
