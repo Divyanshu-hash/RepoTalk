@@ -9,12 +9,12 @@
 :root {
   /* Colors */
   --bg-primary: #000000;
-  --bg-secondary: #0a0a0f;
-  --bg-card: rgba(30, 30, 45, 0.6);
-  --bg-card-hover: rgba(40, 40, 60, 0.8);
+  --bg-secondary: #0d0d0d;
+  --bg-card: rgba(22, 22, 22, 0.9);
+  --bg-card-hover: rgba(30, 30, 30, 0.95);
   --bg-glass: rgba(255, 255, 255, 0.03);
   --bg-input: rgba(255, 255, 255, 0.05);
-  --bg-overlay: rgba(10, 10, 15, 0.92);
+  --bg-overlay: rgba(0, 0, 0, 0.95);
   --bg-input: rgba(255, 255, 255, 0.06);
   --bg-overlay: rgba(18, 19, 31, 0.92);
 
@@ -34,8 +34,8 @@
   --error: #ff6b6b;
   --info: #74b9ff;
 
-  --border-subtle: rgba(255, 255, 255, 0.15);
-  --border-light: rgba(255, 255, 255, 0.2);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.13);
   --border-accent: rgba(108, 92, 231, 0.4);
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -115,7 +115,7 @@
 .app-container {
   height: 100vh;
   width: 100vw;
-  background: #05060f;
+  background: #000000;
   color: var(--text-primary);
   font-family: 'Inter', sans-serif;
   overflow: hidden;
@@ -183,7 +183,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: #05060f;
+  background: #000000;
 }
 
 /* Remove grid pattern — starfield replaces it */
@@ -368,7 +368,7 @@ body {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background: #05060f;
+  background: #000000;
   padding: 2rem;
   z-index: 1;
 }
@@ -1029,7 +1029,7 @@ body {
 .loading-overlay {
   position: fixed;
   inset: 0;
-  background: #05060f;
+  background: #000000;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1829,8 +1829,8 @@ body {
 }
 
 .stat-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   padding: 1.1rem 1rem 1rem;
   backdrop-filter: blur(12px);
@@ -1844,7 +1844,7 @@ body {
 .stat-card:hover {
   transform: translateY(-3px);
   border-color: rgba(255,255,255,0.15);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .stat-content {
@@ -1928,8 +1928,8 @@ body {
 
 /* Analysis card */
 .analysis-card {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--radius-lg);
   padding: 1.75rem 2rem;
   backdrop-filter: blur(12px);
@@ -3489,4 +3489,5 @@ body {
   white-space: pre-wrap;
   max-width: 800px;
 }
+
 
