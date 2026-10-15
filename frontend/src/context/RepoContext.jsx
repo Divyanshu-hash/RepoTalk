@@ -24,6 +24,28 @@ export function RepoProvider({ children }) {
   const [diagramError, setDiagramError] = useState(null);
   const [diagramProgress, setDiagramProgress] = useState(''); // SSE progress message
 
+  // Chat History State
+  const [chatHistory, setChatHistory] = useState([]);
+  const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
+
+  const fetchChatHistory = async (authToken) => {
+    const t = authToken || token;
+    if (!t) return;
+    setChatHistoryLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/repo/chat-history`, {
+        headers: { 'Authorization': `Bearer ${t}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChatHistory(data.messages || []);
+      }
+    } catch (err) {
+      // silently fail — chat history is non-critical
+    }
+    setChatHistoryLoading(false);
+  };
+
   const loadRepo = async (url) => {
     setLoading(true);
     setLoadingMessage('Fetching repository files...');
@@ -56,6 +78,9 @@ export function RepoProvider({ children }) {
       setMetadata(data.metadata);
       setRepoLoaded(true);
       setActiveTab('overview');
+
+      // Load previous chat history for this repo
+      await fetchChatHistory();
     } catch (err) {
       setError('Failed to connect to backend. Make sure the server is running on port 8000.');
     }
@@ -93,6 +118,7 @@ export function RepoProvider({ children }) {
     setDiagramLoading(false);
     setDiagramError(null);
     setDiagramProgress('');
+    setChatHistory([]);
   };
 
   return (
@@ -118,7 +144,9 @@ export function RepoProvider({ children }) {
       diagramError,
       setDiagramError,
       diagramProgress,
-      setDiagramProgress
+      setDiagramProgress,
+      chatHistory,
+      chatHistoryLoading,
     }}>
       {children}
     </RepoContext.Provider>
