@@ -2,13 +2,22 @@ import { useState, useRef, useEffect } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '../context/AuthContext'
+import { useRepo } from '../context/RepoContext'
 
 export default function ChatPanel({ apiBase }) {
   const { token } = useAuth()
+  const { chatHistory, chatHistoryLoading } = useRepo()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
+
+  // Seed messages from persisted chat history when it loads
+  useEffect(() => {
+    if (chatHistory && chatHistory.length > 0) {
+      setMessages(chatHistory.map(m => ({ role: m.role, content: m.content })))
+    }
+  }, [chatHistory])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -59,19 +68,21 @@ export default function ChatPanel({ apiBase }) {
     sendMessage()
   }
 
-  const suggestions = [
-    "What does this project do?",
-    "Explain the main architecture",
-    "What are the key files?",
-    "How does the data flow work?",
-    "What dependencies are used?",
-    "Suggest improvements",
-  ]
-
   return (
     <div className="chat-container">
       <div className="chat-messages">
-        {messages.length === 0 && (
+        {/* History loading state */}
+        {chatHistoryLoading && (
+          <div className="chat-history-loading">
+            <div className="thinking-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <span>Loading previous conversation…</span>
+          </div>
+        )}
+
+        {/* Welcome screen — only if no history and not loading */}
+        {!chatHistoryLoading && messages.length === 0 && (
           <div className="chat-welcome-wiki">
             <div className="chat-welcome-header">
             </div>
@@ -84,6 +95,13 @@ export default function ChatPanel({ apiBase }) {
               <h2>Hi there!</h2>
               <p>Ask me any questions about the codebase</p>
             </div>
+          </div>
+        )}
+
+        {/* History separator when restoring old messages */}
+        {!chatHistoryLoading && messages.length > 0 && chatHistory.length > 0 && (
+          <div className="chat-history-divider">
+            <span>Previous conversation</span>
           </div>
         )}
 

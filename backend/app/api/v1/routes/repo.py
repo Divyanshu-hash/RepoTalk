@@ -539,11 +539,11 @@ async def get_chat_history(
             ChatHistory.user_id == db_user.id,
             ChatHistory.repository_id == repo.id,
         )
-        .order_by(ChatHistory.created_at.desc())
+        .order_by(ChatHistory.id.desc())   # use id to guarantee strict insertion order
         .limit(limit)
         .all()
     )
-    messages.reverse()  # oldest first
+    messages.reverse()  # oldest first → correct chronological display
 
     return {
         "success": True,
