@@ -141,6 +141,9 @@ async def load_repo(
         raise HTTPException(status_code=500, detail=f"Indexing failed: {exc}")
 
     # ── Upsert Repository row in MySQL ────────────────────────
+    existing = db.query(Repository).filter_by(
+        user_id=db_user.id, owner=owner, name=repo_name
+    ).first()
     if existing:
         _update_repo_row(existing, metadata, len(files), str(repo_path))
     else:
@@ -385,7 +388,13 @@ RELEVANT CODE:
 USER QUESTION:
 {query}
 
-RULES: Use ONLY repository code. No invented files. If confidence is low, say so.
+INSTRUCTIONS:
+- Write your answer as clear, readable prose — plain paragraphs and bullet points only.
+- Do NOT use markdown tables. Use bullet lists instead.
+- Do NOT use markdown headings. Use bold text for key terms if needed.
+- Use inline code only for file names, function names, and short snippets.
+- Answer directly based on the issue and code context above. No invented files.
+- If confidence is low, say so.
 
 ANSWER:"""
         response = llm.invoke(prompt)
@@ -396,20 +405,26 @@ ANSWER:"""
         docs = vectorstore.similarity_search(query, k=7)
         context = "\n\n".join(doc.page_content for doc in docs)
 
-        prompt = f"""You are an expert software engineer.
+        prompt = f"""You are an expert software engineer helping a developer understand a GitHub codebase.
 
-RULES:
-- Use ONLY the repository context below
-- Do NOT hallucinate or invent code
-- Mention file names when referencing code
-- Say when information is missing
-- Format with markdown
-
-REPOSITORY CONTEXT:
+REPOSITORY CONTEXT (retrieved code/file snippets):
 {context}
 
 USER QUESTION:
 {query}
+
+INSTRUCTIONS:
+- Read the question carefully and answer ONLY what was asked. Do not add unrequested information.
+- If asked "what is this project" or "tell me about this project", give a concise 2-4 sentence summary of what it does and its main purpose. Nothing else.
+- Do NOT include file breakdowns, getting started guides, installation steps, or "extending the project" sections unless the user explicitly asked for them.
+- Do NOT reproduce README sections or documentation structure. Extract only the insight relevant to the question.
+- Write in plain prose — no markdown headings (no ## or ###), no tables.
+- Use bullet points only when listing 3 or more distinct items that genuinely benefit from a list.
+- Use bold (**text**) sparingly for key terms inline.
+- Use inline code backticks only for file names, function names, and short snippets.
+- Use fenced code blocks only for actual multi-line code.
+- Be concise. A good answer is 2-6 sentences for simple questions, a few short paragraphs for complex ones.
+- If the context does not contain enough information, say so directly.
 
 ANSWER:"""
         response = llm.invoke(prompt)

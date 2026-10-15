@@ -20,6 +20,7 @@ faiss-cpu
 sentence-transformers
 watchfiles
 # Graph / Diagram generation (optional — required for /api/v1/generate/* endpoints)
+groq            # pip install groq         (native Groq SDK for structured output)
 openai          # pip install openai
 boto3           # pip install boto3        (for R2 cloud storage, optional)
 PyJWT           # pip install PyJWT        (for GitHub App auth, optional)
