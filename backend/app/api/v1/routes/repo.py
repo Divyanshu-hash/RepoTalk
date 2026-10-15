@@ -297,7 +297,16 @@ Based on the above, provide a detailed, well-structured analysis.
 10. **Potential Improvements**: What could be better.
 
 Format with clear markdown headers. Reference actual file names.
-MERMAID SYNTAX: No parentheses inside node labels [ ] or {{ }}. Use hyphens instead.
+
+STRICT MERMAID SYNTAX RULES (violations cause rendering errors):
+- Never put parentheses ( ) inside node labels — use hyphens instead: [Label - Tech] not [Label (Tech)]
+- Never put colons : inside quoted node labels
+- Every node ID must be alphanumeric with no spaces: use underscores e.g. user_service
+- Use only these arrow types: --> and -.->
+- Do not add click, style, or classDef directives
+- Keep labels short — under 40 characters
+- Always start flowchart with: flowchart TD
+- Always start sequenceDiagram with: sequenceDiagram
 
 ANALYSIS:"""
 

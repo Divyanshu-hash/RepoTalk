@@ -9,6 +9,7 @@ import WikiPage from './pages/WikiPage';
 function LoadingOverlay({ message }) {
   return (
     <div className="loading-overlay">
+      {/* Stars pseudo-elements are on the overlay itself via CSS */}
       <div className="loading-overlay-inner">
         <div className="loading-logo">
           <div></div><div></div><div></div>
