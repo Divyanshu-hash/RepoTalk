@@ -6,10 +6,11 @@ import { useRepo } from '../context/RepoContext'
 
 // Configure Mermaid.js for dark theme
 mermaid.initialize({
-  startOnLoad: true,
+  startOnLoad: false,
   theme: 'dark',
   securityLevel: 'loose',
-  fontFamily: 'Inter, sans-serif'
+  fontFamily: 'Inter, sans-serif',
+  suppressErrors: true,
 })
 
 const MermaidDiagram = ({ chart }) => {
@@ -19,11 +20,10 @@ const MermaidDiagram = ({ chart }) => {
     if (chart && containerRef.current) {
       const renderDiagram = async () => {
         try {
-          // Sanitize common AI-generated Mermaid syntax errors
           const sanitizedChart = chart
-            // Remove parentheses inside square-bracket node labels: [Label (Tech)] → [Label Tech]
+            // Remove parentheses inside square-bracket node labels: [Label (Tech)] → [Label - Tech]
             .replace(/\[([^\]]*?)\(([^)]+)\)([^\]]*)\]/g, '[$1$2$3]')
-            // Remove parentheses inside curly-brace labels: {Label (x)} → {Label x}
+            // Remove parentheses inside curly-brace labels
             .replace(/\{([^}]*?)\(([^)]+)\)([^}]*)\}/g, '{$1$2$3}')
             // Fix |label|> edge typo
             .replace(/\|([^|]+)\|>\s*/g, '|$1|')
@@ -32,27 +32,52 @@ const MermaidDiagram = ({ chart }) => {
             // Replace smart/curly quotes with straight quotes
             .replace(/[\u2018\u2019]/g, "'")
             .replace(/[\u201C\u201D]/g, '"')
-            .trim();
+            // Remove any HTML tags that sneak in
+            .replace(/<[^>]+>/g, '')
+            // Fix common: node labels with colons (Mermaid treats colon as separator)
+            .replace(/\["([^"]*):([^"]*)"\]/g, '["$1 $2"]')
+            // Remove trailing commas before closing bracket/brace
+            .replace(/,(\s*[}\]])/g, '$1')
+            .trim()
 
           const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`
+
+          // Suppress Mermaid's own error UI by using suppressErrors option
           const { svg } = await mermaid.render(id, sanitizedChart)
           if (containerRef.current) containerRef.current.innerHTML = svg
         } catch (error) {
-          console.error("Mermaid parsing error:", error)
-          if (containerRef.current)
-            containerRef.current.innerHTML = `<div class="error-toast" style="position:static; margin-top:20px;">⚠️ Failed to render diagram. Syntax error in Mermaid code.</div>`
+          console.warn('Mermaid render failed:', error?.message || error)
+          if (containerRef.current) {
+            containerRef.current.innerHTML = `
+              <div style="
+                padding: 1rem 1.25rem;
+                background: rgba(255,107,107,0.07);
+                border: 1px solid rgba(255,107,107,0.2);
+                border-radius: 10px;
+                color: #ff6b6b;
+                font-size: 0.82rem;
+                font-family: inherit;
+                margin: 1rem 0;
+              ">
+                ⚠️ Could not render diagram — the AI generated invalid Mermaid syntax. Try regenerating the analysis.
+              </div>`
+          }
         }
       }
       renderDiagram()
     }
   }, [chart])
 
-  return <div className="mermaid-container" ref={containerRef} style={{ margin: '2rem 0', display: 'flex', justifyContent: 'center' }} />
+  return <div className="mermaid-container" ref={containerRef} style={{ margin: '1.5rem 0' }} />
 }
 
 const slugify = (text) => {
-  return text
-    .toString()
+  const str = Array.isArray(text)
+    ? text.map(t => (typeof t === 'string' ? t : '')).join('')
+    : String(text ?? '');
+  return str
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .replace(/^\d+\.\s*/, '')
     .toLowerCase()
     .replace(/\s+/g, '-')
     .replace(/[^\w-]+/g, '')
