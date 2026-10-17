@@ -3267,6 +3267,14 @@ body {
   animation: fadeIn 0.8s ease forwards;
 }
 
+/* Hide any Mermaid bomb/error UI that slips through */
+.mermaid-container .error-icon,
+.mermaid-container [id$="-error"],
+.mermaid-container svg[aria-roledescription="error"],
+.mermaid-container [class*="error"] {
+  display: none !important;
+}
+
 .mermaid-container svg {
   max-width: 100%;
   height: auto;

@@ -19,48 +19,55 @@ const MermaidDiagram = ({ chart }) => {
   useEffect(() => {
     if (chart && containerRef.current) {
       const renderDiagram = async () => {
+        const container = containerRef.current
+        if (!container) return
+
+        // Clear any previous content
+        container.innerHTML = ''
+
         try {
           const sanitizedChart = chart
-            // Remove parentheses inside square-bracket node labels: [Label (Tech)] → [Label - Tech]
             .replace(/\[([^\]]*?)\(([^)]+)\)([^\]]*)\]/g, '[$1$2$3]')
-            // Remove parentheses inside curly-brace labels
             .replace(/\{([^}]*?)\(([^)]+)\)([^}]*)\}/g, '{$1$2$3}')
-            // Fix |label|> edge typo
             .replace(/\|([^|]+)\|>\s*/g, '|$1|')
-            // Fix stray spaces after labeled edges
             .replace(/\|([^|]+)\|\s+/g, '|$1|')
-            // Replace smart/curly quotes with straight quotes
             .replace(/[\u2018\u2019]/g, "'")
             .replace(/[\u201C\u201D]/g, '"')
-            // Remove any HTML tags that sneak in
             .replace(/<[^>]+>/g, '')
-            // Fix common: node labels with colons (Mermaid treats colon as separator)
             .replace(/\["([^"]*):([^"]*)"\]/g, '["$1 $2"]')
-            // Remove trailing commas before closing bracket/brace
             .replace(/,(\s*[}\]])/g, '$1')
             .trim()
 
           const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`
-
-          // Suppress Mermaid's own error UI by using suppressErrors option
           const { svg } = await mermaid.render(id, sanitizedChart)
-          if (containerRef.current) containerRef.current.innerHTML = svg
+
+          if (!container) return
+
+          // Check if Mermaid silently rendered an error UI instead of a diagram
+          const tempDiv = document.createElement('div')
+          tempDiv.innerHTML = svg
+          const hasError = tempDiv.querySelector('.error-icon') ||
+                           tempDiv.querySelector('[id$="-error"]') ||
+                           svg.includes('Syntax error') ||
+                           svg.includes('mermaid version')
+
+          if (hasError) {
+            container.innerHTML = ''
+            return
+          }
+
+          container.innerHTML = svg
         } catch (error) {
           console.warn('Mermaid render failed:', error?.message || error)
-          if (containerRef.current) {
-            containerRef.current.innerHTML = `
-              <div style="
-                padding: 1rem 1.25rem;
-                background: rgba(255,107,107,0.07);
-                border: 1px solid rgba(255,107,107,0.2);
-                border-radius: 10px;
-                color: #ff6b6b;
-                font-size: 0.82rem;
-                font-family: inherit;
-                margin: 1rem 0;
-              ">
-                ⚠️ Could not render diagram — the AI generated invalid Mermaid syntax. Try regenerating the analysis.
-              </div>`
+          // Silently clear — don't show the error UI
+          if (container) container.innerHTML = ''
+        }
+
+        // Final safety: if Mermaid injected bomb/error UI despite everything, nuke it
+        if (container) {
+          const errorNodes = container.querySelectorAll('.error-icon, [id$="-error"], svg[aria-roledescription="error"]')
+          if (errorNodes.length > 0 || container.textContent.includes('Syntax error')) {
+            container.innerHTML = ''
           }
         }
       }

@@ -91,9 +91,9 @@ export default function Hero({ onLoadRepo }) {
           <p className="recent-repos-label">Recently Explored</p>
           <div
             className="recent-repos-grid"
-            style={{ '--repo-count': Math.min(repoHistory.length, 6) }}
+            style={{ '--repo-count': 4 }}
           >
-            {repoHistory.slice(0, 6).map((repo) => (
+            {repoHistory.map((repo) => (
               <button
                 key={repo.id}
                 className="recent-repo-card"
